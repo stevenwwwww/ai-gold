@@ -1,0 +1,47 @@
+.input-bar {
+  padding: 12rpx 24rpx 16rpx;
+}
+
+.input-bar-inner {
+  display: flex;
+  align-items: center;
+  background: #F5F5F5;
+  border-radius: 44rpx;
+  padding: 8rpx 8rpx 8rpx 28rpx;
+}
+
+.input-bar-input {
+  flex: 1;
+  height: 72rpx;
+  font-size: 28rpx;
+  color: #333;
+  background: transparent;
+}
+
+.input-placeholder {
+  color: #CCC;
+}
+
+.input-bar-send {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: #E0E0E0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &.active {
+    background: #FF4757;
+  }
+}
+
+.send-arrow {
+  width: 0;
+  height: 0;
+  border-left: 16rpx solid #FFFFFF;
+  border-top: 10rpx solid transparent;
+  border-bottom: 10rpx solid transparent;
+  margin-left: 4rpx;
+}

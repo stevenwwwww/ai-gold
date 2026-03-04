@@ -1,0 +1,22 @@
+.model-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.model-selector-item {
+  padding: 24rpx 32rpx;
+  background-color: #F8F9FA;
+  border-radius: 12rpx;
+  border: 2rpx solid transparent;
+
+  &.active {
+    background-color: #EFF6FF;
+    border-color: #3B82F6;
+  }
+}
+
+.model-selector-label {
+  font-size: 28rpx;
+  color: #1A1A1A;
+}

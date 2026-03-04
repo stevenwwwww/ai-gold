@@ -1,0 +1,48 @@
+{
+  "name": "mini-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "大模型问答小程序",
+  "scripts": {
+    "build:weapp": "taro build --type weapp",
+    "build:alipay": "taro build --type alipay",
+    "build:h5": "taro build --type h5",
+    "dev:weapp": "yarn build:weapp --watch",
+    "dev:alipay": "yarn build:alipay --watch",
+    "dev:h5": "yarn build:h5 --watch"
+  },
+  "browserslist": [
+    "last 3 versions",
+    "Android >= 4.1",
+    "ios >= 8"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@tarojs/components": "3.6.25",
+    "@tarojs/helper": "3.6.25",
+    "@tarojs/plugin-framework-react": "3.6.25",
+    "@tarojs/plugin-platform-alipay": "3.6.25",
+    "@tarojs/plugin-platform-h5": "3.6.25",
+    "@tarojs/plugin-platform-weapp": "3.6.25",
+    "@tarojs/react": "3.6.25",
+    "@tarojs/runtime": "3.6.25",
+    "@tarojs/shared": "3.6.25",
+    "@tarojs/taro": "3.6.25",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@pmmmwh/react-refresh-webpack-plugin": "^0.6.2",
+    "@tarojs/cli": "3.6.25",
+    "@tarojs/webpack5-runner": "3.6.25",
+    "@types/react": "^18.2.0",
+    "babel-preset-taro": "3.6.25",
+    "postcss": "^8.5.8",
+    "react-refresh": "^0.18.0",
+    "sass": "^1.69.0",
+    "typescript": "^5.3.0",
+    "webpack": "5.88.0"
+  }
+}

@@ -1,0 +1,97 @@
+.mini-chart {
+  margin: 16rpx 0;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  border: 1rpx solid #F0F0F0;
+}
+
+.mini-chart-title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+.mini-chart-body {
+  display: flex;
+  height: 240rpx;
+  gap: 12rpx;
+}
+
+.mini-chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4rpx 0;
+  flex-shrink: 0;
+}
+
+.mini-chart-y-label {
+  font-size: 18rpx;
+  color: #CCC;
+  width: 100rpx;
+  text-align: right;
+}
+
+.mini-chart-bars {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 4rpx;
+  border-bottom: 1rpx solid #F0F0F0;
+  border-left: 1rpx solid #F0F0F0;
+  padding: 0 4rpx;
+}
+
+.mini-chart-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+.mini-chart-bar {
+  width: 100%;
+  min-width: 8rpx;
+  max-width: 48rpx;
+  border-radius: 4rpx 4rpx 0 0;
+  transition: height 0.3s ease;
+
+  &.bar-red {
+    background: linear-gradient(180deg, #FF4757 0%, #FF6B6B 100%);
+  }
+
+  &.bar-green {
+    background: linear-gradient(180deg, #22C55E 0%, #4ADE80 100%);
+  }
+}
+
+.mini-chart-x-label {
+  font-size: 16rpx;
+  color: #CCC;
+  margin-top: 8rpx;
+  white-space: nowrap;
+}
+
+.mini-chart-footer {
+  margin-top: 12rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mini-chart-change {
+  font-size: 24rpx;
+  font-weight: 600;
+
+  &.up {
+    color: #EF4444;
+  }
+
+  &.down {
+    color: #22C55E;
+  }
+}

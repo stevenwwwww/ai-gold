@@ -1,0 +1,35 @@
+.prompt-tags-scroll {
+  white-space: nowrap;
+  padding: 16rpx 24rpx 8rpx;
+}
+
+.prompt-tags {
+  display: inline-flex;
+  gap: 16rpx;
+}
+
+.prompt-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 12rpx 24rpx;
+  background: #FFF5F5;
+  border-radius: 32rpx;
+  border: 1rpx solid #FFE0E0;
+  flex-shrink: 0;
+
+  &.disabled {
+    opacity: 0.5;
+  }
+}
+
+.prompt-tag-icon {
+  font-size: 24rpx;
+}
+
+.prompt-tag-label {
+  font-size: 24rpx;
+  color: #FF4757;
+  font-weight: 500;
+  white-space: nowrap;
+}
