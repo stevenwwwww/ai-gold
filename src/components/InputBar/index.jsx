@@ -1,4 +1,4 @@
-import { View, Input } from '@tarojs/components'
+import { View, Input, Text } from '@tarojs/components'
 import { useState } from 'react'
 import './index.scss'
 
@@ -6,31 +6,32 @@ export default function InputBar({ onSend, disabled }) {
   const [value, setValue] = useState('')
 
   const handleSend = () => {
-    if (disabled) return
-    if (value?.trim()) {
-      onSend?.(value)
-      setValue('')
-    }
+    if (disabled || !value?.trim()) return
+    onSend?.(value)
+    setValue('')
   }
 
   return (
-    <View className="input-bar">
-      <View className="input-bar-inner">
+    <View className="ibar">
+      <View className="ibar-inner">
         <Input
-          className="input-bar-input"
+          className="ibar-input"
           placeholder={disabled ? 'AI 正在分析中...' : '有问题，尽管问...'}
-          placeholderClass="input-placeholder"
+          placeholderClass="ibar-placeholder"
           value={value}
           disabled={disabled}
           onInput={(e) => setValue(e.detail.value)}
           confirmType="send"
           onConfirm={handleSend}
         />
+        <View className="ibar-extra">
+          <Text className="ibar-plus">+</Text>
+        </View>
         <View
-          className={`input-bar-send ${value?.trim() && !disabled ? 'active' : ''}`}
+          className={`ibar-send ${value?.trim() && !disabled ? 'ibar-send-active' : ''}`}
           onClick={handleSend}
         >
-          <View className="send-arrow" />
+          <View className="ibar-arrow" />
         </View>
       </View>
     </View>

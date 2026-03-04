@@ -1,73 +1,48 @@
-.data-table {
-  margin: 16rpx 0;
-  background: #FFFFFF;
+.dtable {
+  margin: 20rpx 0;
+  background: var(--c-card, #FFF);
   border-radius: 16rpx;
+  border: 1rpx solid var(--c-b2, #F3F4F6);
   overflow: hidden;
-  border: 1rpx solid #F0F0F0;
+  width: 100%;
+  box-sizing: border-box;
 }
-
-.data-table-title {
-  display: block;
+.dtable-head { padding: 20rpx 24rpx 12rpx; }
+.dtable-title {
   font-size: 26rpx;
   font-weight: 600;
-  color: #333;
-  padding: 20rpx 24rpx 12rpx;
+  color: var(--c-t1, #1A1D26);
 }
-
-.data-table-scroll {
+.dtable-wrap {
   width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
-
-.data-table-inner {
-  min-width: 100%;
-}
-
-.data-table-header {
+.dtable-header {
   display: flex;
-  background: #FFF5F5;
-  border-bottom: 1rpx solid #FFE0E0;
+  background: var(--c-red-bg, #FFF5F5);
+  border-bottom: 1rpx solid var(--c-red-light, #FEE2E2);
 }
-
-.data-table-th {
-  flex: 1;
-  padding: 16rpx 20rpx;
-  min-width: 160rpx;
-}
-
-.data-table-th-text {
+.dtable-th { flex: 1; padding: 16rpx; min-width: 120rpx; }
+.dtable-th-text {
   font-size: 22rpx;
   font-weight: 600;
-  color: #FF4757;
+  color: var(--c-red, #E63946);
 }
-
-.data-table-row {
+.dtable-row {
   display: flex;
-  border-bottom: 1rpx solid #F8F8F8;
+  border-bottom: 1rpx solid var(--c-b2, #F3F4F6);
 
-  &.even {
-    background: #FCFCFC;
-  }
-
-  &:last-child {
-    border-bottom: none;
-  }
+  &.even { background: var(--c-bg, #F5F6FA); }
+  &:last-child { border-bottom: none; }
 }
-
-.data-table-td {
-  flex: 1;
-  padding: 16rpx 20rpx;
-  min-width: 160rpx;
-}
-
-.data-table-td-text {
+.dtable-td { flex: 1; padding: 14rpx 16rpx; min-width: 120rpx; }
+.dtable-td-text {
   font-size: 24rpx;
-  color: #333;
+  color: var(--c-t1, #1A1D26);
+  word-break: break-word;
 
-  &.val-up {
-    color: #EF4444;
-  }
-
-  &.val-down {
-    color: #22C55E;
-  }
+  &.bold { font-weight: 600; }
+  &.c-up { color: var(--c-up, #EF4444); font-weight: 600; }
+  &.c-down { color: var(--c-down, #10B981); font-weight: 600; }
 }

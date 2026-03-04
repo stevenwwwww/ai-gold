@@ -1,11 +1,9 @@
 /**
  * 对话服务 - 管理消息列表、调用模型、缓存历史
- * 与 HistoryService 集成，支持后期无缝切换到服务端存储
+ * 每个 ChatService 实例代表一个独立会话
  */
 import { getModelService } from '@/services/model/ModelService'
 import { getHistoryService } from '@/services/history/HistoryService'
-import { getStorage, setStorage } from '@/utils/platform'
-import { config } from '@/constants/config'
 import type { ChatMessage } from './types'
 
 export type OnMessageUpdate = (messages: ChatMessage[]) => void
@@ -15,16 +13,20 @@ export class ChatService {
   private onUpdate: OnMessageUpdate | null = null
   private sessionId: string
 
-  constructor() {
-    this.sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  constructor(sessionId?: string) {
+    this.sessionId = sessionId || `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   }
 
-  setOnUpdate(cb: OnMessageUpdate) {
+  getSessionId(): string {
+    return this.sessionId
+  }
+
+  setOnUpdate(cb: OnMessageUpdate | null) {
     this.onUpdate = cb
   }
 
   private notify() {
-    this.onUpdate?.(this.messages)
+    this.onUpdate?.([...this.messages])
   }
 
   getMessages(): ChatMessage[] {
@@ -46,78 +48,28 @@ export class ChatService {
       .map((m) => ({ role: m.role, content: m.content }))
 
     try {
-      const res = await modelService.chat({
-        messages: [...history]
-      })
-
-      this.messages = this.messages.map((m, i) => {
-        if (m.loading && i === this.messages.length - 1) {
-          return { ...m, content: res.content, loading: false }
-        }
-        return m
-      })
+      const res = await modelService.chat({ messages: [...history] })
+      this.messages = this.messages.map((m, i) =>
+        m.loading && i === this.messages.length - 1
+          ? { ...m, content: res.content, loading: false }
+          : m
+      )
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : '请求失败'
-      this.messages = this.messages.map((m, i) => {
-        if (m.loading && i === this.messages.length - 1) {
-          return { ...m, content: '', loading: false, error: errMsg }
-        }
-        return m
-      })
+      this.messages = this.messages.map((m, i) =>
+        m.loading && i === this.messages.length - 1
+          ? { ...m, content: '', loading: false, error: errMsg }
+          : m
+      )
     }
 
     this.notify()
-    this.saveHistory()
-    this.saveToHistoryService()
-  }
-
-  async *sendStream(content: string): AsyncGenerator<string, void, unknown> {
-    if (!content?.trim()) return
-
-    const userMsg: ChatMessage = { role: 'user', content: content.trim() }
-    const assistantMsg: ChatMessage = { role: 'assistant', content: '', loading: true }
-
-    this.messages = [...this.messages, userMsg, assistantMsg]
-    this.notify()
-
-    const modelService = getModelService()
-    const history = this.messages
-      .filter((m) => !m.loading && !m.error)
-      .map((m) => ({ role: m.role, content: m.content }))
-
-    let fullContent = ''
-    try {
-      for await (const chunk of modelService.chatStream({ messages: history })) {
-        fullContent += chunk
-        this.messages = this.messages.map((m, i) => {
-          if (m.loading && i === this.messages.length - 1) {
-            return { ...m, content: fullContent, loading: false }
-          }
-          return m
-        })
-        this.notify()
-        yield chunk
-      }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : '请求失败'
-      this.messages = this.messages.map((m, i) => {
-        if (m.loading && i === this.messages.length - 1) {
-          return { ...m, content: fullContent || '', loading: false, error: errMsg }
-        }
-        return m
-      })
-      this.notify()
-    }
-
-    this.saveHistory()
-    this.saveToHistoryService()
+    this.persistSession()
   }
 
   clear(): void {
     this.messages = []
-    this.sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     this.notify()
-    setStorage(config.storageKeys.chatHistory, [])
   }
 
   async retryFailed(idx: number): Promise<void> {
@@ -126,10 +78,7 @@ export class ChatService {
 
     let userIdx = -1
     for (let i = idx - 1; i >= 0; i--) {
-      if (this.messages[i].role === 'user') {
-        userIdx = i
-        break
-      }
+      if (this.messages[i].role === 'user') { userIdx = i; break }
     }
     if (userIdx < 0) return
 
@@ -154,36 +103,32 @@ export class ChatService {
       this.messages[idx] = { ...failedMsg, content: '', loading: false, error: errMsg }
     }
     this.notify()
-    this.saveHistory()
-    this.saveToHistoryService()
+    this.persistSession()
   }
 
-  loadHistory(): void {
-    const saved = getStorage<ChatMessage[]>(config.storageKeys.chatHistory)
-    if (Array.isArray(saved) && saved.length > 0) {
-      this.messages = saved
+  /** 加载指定会话 */
+  async loadSession(sessionId: string): Promise<void> {
+    const session = await getHistoryService().getSession(sessionId)
+    if (session) {
+      this.sessionId = session.id
+      this.messages = session.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }))
       this.notify()
     }
   }
 
-  private saveHistory(): void {
-    const toSave = this.messages
-      .filter((m) => !m.loading)
-      .map(({ role, content, error }) => ({ role, content, error }))
-    setStorage(config.storageKeys.chatHistory, toSave)
-  }
-
-  private async saveToHistoryService(): Promise<void> {
+  private async persistSession(): Promise<void> {
     try {
       const validMsgs = this.messages
         .filter((m) => !m.loading && m.content)
         .map(({ role, content }) => ({ role, content }))
-
       if (validMsgs.length === 0) return
 
-      const firstUserMsg = validMsgs.find((m) => m.role === 'user')
-      const title = firstUserMsg
-        ? firstUserMsg.content.slice(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '')
+      const firstUser = validMsgs.find((m) => m.role === 'user')
+      const title = firstUser
+        ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '')
         : '新对话'
 
       await getHistoryService().saveSession({
@@ -191,19 +136,18 @@ export class ChatService {
         title,
         messages: validMsgs,
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
       })
     } catch (e) {
-      console.warn('[ChatService] saveToHistoryService error:', e)
+      console.warn('[ChatService] persistSession error:', e)
     }
   }
 }
 
-let chatServiceInstance: ChatService | null = null
-
-export function getChatService(): ChatService {
-  if (!chatServiceInstance) {
-    chatServiceInstance = new ChatService()
-  }
-  return chatServiceInstance
+/**
+ * 每次调用都创建全新会话实例
+ * Chat 页面 useEffect 中调用此函数
+ */
+export function createChatService(): ChatService {
+  return new ChatService()
 }

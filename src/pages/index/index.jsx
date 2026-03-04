@@ -1,18 +1,20 @@
-import { View, Text, ScrollView, Image } from '@tarojs/components'
+import { View, Text, ScrollView } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { useState, useEffect } from 'react'
 import { getNewsService } from '@/services/news/NewsService'
 import { getHistoryService } from '@/services/history/HistoryService'
+import { useTheme, usePageTheme } from '@/components/ThemeProvider'
+import { themeService } from '@/services/theme/ThemeService'
 import './index.scss'
 
 export default function Index() {
+  const { isDark } = useTheme()
+  const tc = usePageTheme()
   const [newsList, setNewsList] = useState([])
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     setLoading(true)
@@ -23,31 +25,26 @@ export default function Index() {
       ])
       setNewsList(news || [])
       setSessions((hist || []).slice(0, 5))
-    } catch (e) {
-      console.warn('[Index] loadData error:', e)
-    }
+    } catch (e) { console.warn('[Index]', e) }
     setLoading(false)
   }
 
-  const goToChat = (prefill) => {
-    const url = prefill
-      ? `/pages/chat/index?prefill=${encodeURIComponent(prefill)}`
-      : '/pages/chat/index'
-    Taro.navigateTo({ url })
+  const goChat = (prefill) => {
+    Taro.navigateTo({
+      url: prefill
+        ? `/pages/chat/index?prefill=${encodeURIComponent(prefill)}`
+        : '/pages/chat/index'
+    })
   }
 
-  const goToSettings = () => {
-    Taro.navigateTo({ url: '/pages/settings/index' })
-  }
-
-  const goToHistory = () => {
-    Taro.navigateTo({ url: '/pages/history/index' })
+  const goChatSession = (sid) => {
+    Taro.navigateTo({ url: `/pages/chat/index?sessionId=${sid}` })
   }
 
   const getGreeting = () => {
     const h = new Date().getHours()
     if (h < 9) return '早盘前好'
-    if (h < 11.5) return '上午好'
+    if (h < 12) return '上午好'
     if (h < 13) return '午间好'
     if (h < 15) return '下午好'
     if (h < 18) return '盘后好'
@@ -55,101 +52,111 @@ export default function Index() {
   }
 
   return (
-    <View className="home-page">
-      <View className="home-header">
-        <View className="home-header-left">
-          <View className="home-avatar">
-            <Text className="home-avatar-text">问</Text>
-          </View>
-          <View className="home-greeting">
-            <Text className="home-greeting-hi">{getGreeting()}，我是问股AI</Text>
-            <Text className="home-greeting-sub">你的智能投顾助理，为你准备了以下热点</Text>
-          </View>
+    <View className={`hp ${tc}`}>
+      <View className="hp-bar">
+        <View className="hp-bar-l">
+          <Text className="hp-bar-menu">☰</Text>
         </View>
-        <View className="home-header-right">
-          <Text className="home-icon-btn" onClick={goToHistory}>📋</Text>
-          <Text className="home-icon-btn" onClick={goToSettings}>⚙️</Text>
+        <Text className="hp-bar-title">问股AI</Text>
+        <View className="hp-bar-r">
+          <Text className="hp-bar-icon" onClick={() => themeService.toggle()}>
+            {isDark ? '☀️' : '🌙'}
+          </Text>
+          <Text className="hp-bar-icon" onClick={() => Taro.navigateTo({ url: '/pages/history/index' })}>📋</Text>
+          <Text className="hp-bar-icon" onClick={() => Taro.navigateTo({ url: '/pages/settings/index' })}>⚙️</Text>
         </View>
       </View>
 
-      <ScrollView scrollY className="home-body">
-        <View className="home-section">
-          <View className="home-section-header">
-            <Text className="home-section-title">🔥 热点讨论</Text>
-            <Text className="home-section-sub">影响股市的热点事件</Text>
+      <ScrollView scrollY className="hp-body">
+        {/* 问候区 - 仿问财风格 */}
+        <View className="hp-greet">
+          <View className="hp-greet-avatar">
+            <Text className="hp-greet-avatar-t">问</Text>
           </View>
-          <View className="home-news-list">
-            {loading ? (
-              <View className="home-news-loading">
-                <Text className="home-news-loading-text">加载中...</Text>
-              </View>
-            ) : newsList.length === 0 ? (
-              <Text className="home-news-empty">暂无热点</Text>
-            ) : (
-              newsList.map((item, i) => (
+          <View className="hp-greet-info">
+            <Text className="hp-greet-h">{getGreeting()}，我是问股</Text>
+            <Text className="hp-greet-p">我是你的智能投顾助理，我为你准备了以下可能对你有帮助的话题：</Text>
+          </View>
+        </View>
+
+        {/* 热点新闻卡片 */}
+        <View className="hp-sec">
+          <View className="hp-sec-head">
+            <Text className="hp-sec-title">热点讨论、热点突发</Text>
+          </View>
+          <Text className="hp-sec-sub">全网热议！你关心的问题都在这里！</Text>
+
+          {loading ? (
+            <View className="hp-loading">
+              <View className="hp-loading-bar" />
+              <Text className="hp-loading-t">正在获取热点...</Text>
+            </View>
+          ) : (
+            <View className="hp-news">
+              {newsList.map((item, i) => (
                 <View
                   key={item.id}
-                  className="home-news-item"
-                  onClick={() => goToChat(`请分析以下新闻对A股市场的影响：\n${item.title}`)}
+                  className="hp-news-item"
+                  onClick={() => goChat(`请分析以下新闻对A股市场的影响：\n${item.title}`)}
                 >
-                  <Text className={`home-news-rank ${i < 3 ? 'hot' : ''}`}>{i + 1}</Text>
-                  <Text className="home-news-title">{item.title}</Text>
+                  <Text className={`hp-news-num ${i < 3 ? 'hot' : ''}`}>{i + 1}</Text>
+                  <Text className="hp-news-text">{item.title}</Text>
                 </View>
-              ))
-            )}
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* 智能分析 */}
+        <View className="hp-sec">
+          <Text className="hp-sec-title">智能分析</Text>
+          <View className="hp-tags">
+            {[
+              { k: 'MARKET_TREND', icon: '📊', label: '大势研判', sub: '全局走势' },
+              { k: 'TREND_FORECAST', icon: '📈', label: '走势预测', sub: '趋势分析' },
+              { k: 'TRADE_SIGNAL', icon: '⚡', label: '买卖研判', sub: '买卖信号' },
+              { k: 'STOCK_PICK', icon: '🔍', label: '选股票', sub: '精选推荐' },
+              { k: 'INDUSTRY_ANALYSIS', icon: '🏭', label: '行业分析', sub: '板块轮动' },
+            ].map((t) => (
+              <View key={t.k} className="hp-tag" onClick={() => goChat(t.k)}>
+                <Text className="hp-tag-icon">{t.icon}</Text>
+                <View className="hp-tag-info">
+                  <Text className="hp-tag-label">{t.label}</Text>
+                  <Text className="hp-tag-sub">{t.sub}</Text>
+                </View>
+              </View>
+            ))}
           </View>
         </View>
 
-        <View className="home-section">
-          <Text className="home-section-title">⚡ 快速分析</Text>
-          <View className="home-quick-tags">
-            <View className="home-quick-tag" onClick={() => goToChat('MARKET_TREND')}>
-              <Text className="home-quick-tag-icon">📊</Text>
-              <Text className="home-quick-tag-label">大势研判</Text>
-            </View>
-            <View className="home-quick-tag" onClick={() => goToChat('TREND_FORECAST')}>
-              <Text className="home-quick-tag-icon">📈</Text>
-              <Text className="home-quick-tag-label">走势预测</Text>
-            </View>
-            <View className="home-quick-tag" onClick={() => goToChat('TRADE_SIGNAL')}>
-              <Text className="home-quick-tag-icon">⚡</Text>
-              <Text className="home-quick-tag-label">买卖研判</Text>
-            </View>
-            <View className="home-quick-tag" onClick={() => goToChat('STOCK_PICK')}>
-              <Text className="home-quick-tag-icon">🔍</Text>
-              <Text className="home-quick-tag-label">选股票</Text>
-            </View>
-            <View className="home-quick-tag" onClick={() => goToChat('INDUSTRY_ANALYSIS')}>
-              <Text className="home-quick-tag-icon">🏭</Text>
-              <Text className="home-quick-tag-label">行业分析</Text>
-            </View>
-          </View>
-        </View>
-
+        {/* 最近对话 */}
         {sessions.length > 0 && (
-          <View className="home-section">
-            <View className="home-section-header">
-              <Text className="home-section-title">💬 最近对话</Text>
-              <Text className="home-section-more" onClick={goToHistory}>查看全部</Text>
+          <View className="hp-sec">
+            <View className="hp-sec-head">
+              <Text className="hp-sec-title">最近对话</Text>
+              <Text className="hp-sec-more" onClick={() => Taro.navigateTo({ url: '/pages/history/index' })}>查看全部 ›</Text>
             </View>
             {sessions.map((s) => (
-              <View key={s.id} className="home-session-item" onClick={() => goToChat()}>
-                <Text className="home-session-title">{s.title}</Text>
-                <Text className="home-session-time">
-                  {new Date(s.updatedAt).toLocaleDateString()}
-                </Text>
+              <View key={s.id} className="hp-hist-item" onClick={() => goChatSession(s.id)}>
+                <View className="hp-hist-dot" />
+                <View className="hp-hist-mid">
+                  <Text className="hp-hist-title">{s.title}</Text>
+                </View>
+                <Text className="hp-hist-time">{new Date(s.updatedAt).toLocaleDateString()}</Text>
               </View>
             ))}
           </View>
         )}
 
-        <View className="home-start-btn" onClick={() => goToChat()}>
-          <Text className="home-start-btn-text">开始提问</Text>
+        {/* CTA */}
+        <View className="hp-cta" onClick={() => goChat()}>
+          <Text className="hp-cta-t">有问题，尽管问...</Text>
+          <View className="hp-cta-btn">
+            <Text className="hp-cta-btn-t">›</Text>
+          </View>
         </View>
 
-        <View className="home-disclaimer">
-          <Text className="home-disclaimer-text">内容由AI生成，不构成投资建议</Text>
-        </View>
+        <Text className="hp-disclaimer">内容由AI生成，不构成投资建议</Text>
       </ScrollView>
     </View>
   )

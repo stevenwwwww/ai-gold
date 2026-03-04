@@ -1,35 +1,29 @@
-.prompt-tags-scroll {
-  white-space: nowrap;
+.ptags-scroll {
+  width: 100%;
   padding: 16rpx 24rpx 8rpx;
 }
-
-.prompt-tags {
+.ptags-inner {
   display: inline-flex;
-  gap: 16rpx;
+  gap: 12rpx;
+  white-space: nowrap;
 }
-
-.prompt-tag {
+.ptag {
   display: inline-flex;
   align-items: center;
-  gap: 6rpx;
-  padding: 12rpx 24rpx;
-  background: #FFF5F5;
-  border-radius: 32rpx;
-  border: 1rpx solid #FFE0E0;
+  gap: 8rpx;
+  padding: 14rpx 24rpx;
+  background: var(--c-red-bg, #FFF5F5);
+  border-radius: 28rpx;
+  border: 1rpx solid var(--c-red-light, #FEE2E2);
   flex-shrink: 0;
+  transition: opacity 0.2s ease;
 
-  &.disabled {
-    opacity: 0.5;
-  }
+  &.ptag-disabled { opacity: 0.35; }
 }
-
-.prompt-tag-icon {
+.ptag-icon { font-size: 24rpx; }
+.ptag-label {
   font-size: 24rpx;
-}
-
-.prompt-tag-label {
-  font-size: 24rpx;
-  color: #FF4757;
-  font-weight: 500;
+  color: var(--c-red, #E63946);
+  font-weight: 600;
   white-space: nowrap;
 }

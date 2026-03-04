@@ -1,74 +1,93 @@
-.msg-wrap {
+.bubble-row {
   display: flex;
   margin-bottom: 24rpx;
+  width: 100%;
+  overflow: hidden;
 
-  &.is-user {
+  &.bubble-user {
     flex-direction: row-reverse;
+
+    .bubble-avatar { margin-right: 0; margin-left: 12rpx; }
   }
 }
-
-.msg-avatar {
-  width: 64rpx;
-  height: 64rpx;
+.bubble-avatar {
+  width: 60rpx;
+  height: 60rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #FF6B6B, #FF4757);
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-right: 16rpx;
+  margin-right: 12rpx;
   margin-top: 4rpx;
-}
 
-.msg-avatar-text {
+  &.bubble-avatar-user {
+    background: linear-gradient(135deg, #3B82F6, #60A5FA);
+  }
+}
+.bubble-avatar-char {
   font-size: 22rpx;
-  font-weight: 700;
-  color: #FFFFFF;
+  font-weight: 800;
+  color: #FFF;
 }
-
-.msg-bubble {
-  max-width: 80%;
-  padding: 24rpx 28rpx;
+.bubble-body {
+  max-width: 72%;
+  min-width: 0;
+  padding: 20rpx 24rpx;
   border-radius: 20rpx;
-  word-break: break-all;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
-
-.msg-user {
-  background: #FF4757;
-  color: #FFFFFF;
+.bubble-body-user {
+  background: linear-gradient(135deg, #6366F1, #818CF8);
+  color: #FFF;
   border-top-right-radius: 6rpx;
+  box-shadow: 0 4rpx 16rpx rgba(99, 102, 241, 0.2);
 }
-
-.msg-ai {
-  background: #FFFFFF;
-  color: #333;
+.bubble-body-ai {
+  background: var(--c-card, #FFF);
+  color: var(--c-t1, #1A1D26);
   border-top-left-radius: 6rpx;
-  box-shadow: 0 1rpx 6rpx rgba(0,0,0,0.04);
+  border: 1rpx solid var(--c-b2, #F3F4F6);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
 }
-
-.msg-error {
+.bubble-body-error {
   background: #FEF2F2;
   border: 1rpx solid #FECACA;
+  box-shadow: none;
 }
-
-.msg-text {
+.bubble-text {
   font-size: 28rpx;
-  line-height: 1.7;
+  line-height: 1.75;
+  display: block;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
-
-.msg-error-wrap {
+.bubble-rich {
+  width: 100%;
+  overflow: hidden;
+}
+.bubble-error {
   display: flex;
-  flex-direction: column;
-  gap: 12rpx;
+  align-items: center;
+  gap: 16rpx;
 }
-
-.msg-error-text {
+.bubble-error-msg {
   font-size: 26rpx;
   color: #EF4444;
+  flex: 1;
 }
-
-.msg-retry-btn {
+.bubble-retry {
+  padding: 8rpx 24rpx;
+  background: #FEE2E2;
+  border-radius: 24rpx;
+  flex-shrink: 0;
+}
+.bubble-retry-text {
   font-size: 24rpx;
-  color: #FF4757;
-  font-weight: 500;
+  color: #EF4444;
+  font-weight: 600;
 }

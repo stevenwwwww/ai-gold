@@ -1,55 +1,43 @@
-import { View, Text, ScrollView } from '@tarojs/components'
+import { View, Text } from '@tarojs/components'
 import './index.scss'
 
-/**
- * 数据表格组件
- * columns: [{ key: string, title: string, width?: string }]
- * data: [{ [key]: value }]
- */
 export default function DataTable({ title, columns = [], data = [] }) {
   if (!columns.length || !data.length) return null
 
   return (
-    <View className="data-table">
-      {title && <Text className="data-table-title">{title}</Text>}
-      <ScrollView scrollX className="data-table-scroll">
-        <View className="data-table-inner">
-          <View className="data-table-header">
-            {columns.map((col) => (
-              <View
-                key={col.key}
-                className="data-table-th"
-                style={col.width ? { width: col.width, minWidth: col.width } : {}}
-              >
-                <Text className="data-table-th-text">{col.title}</Text>
-              </View>
-            ))}
-          </View>
-          {data.map((row, i) => (
-            <View key={i} className={`data-table-row ${i % 2 === 0 ? 'even' : ''}`}>
-              {columns.map((col) => (
-                <View
-                  key={col.key}
-                  className="data-table-td"
-                  style={col.width ? { width: col.width, minWidth: col.width } : {}}
-                >
-                  <Text className={`data-table-td-text ${getValueClass(row[col.key])}`}>
-                    {row[col.key] ?? '-'}
-                  </Text>
-                </View>
-              ))}
+    <View className="dtable">
+      {title && (
+        <View className="dtable-head">
+          <Text className="dtable-title">{title}</Text>
+        </View>
+      )}
+      <View className="dtable-wrap">
+        <View className="dtable-header">
+          {columns.map((col) => (
+            <View key={col.key} className="dtable-th">
+              <Text className="dtable-th-text">{col.title}</Text>
             </View>
           ))}
         </View>
-      </ScrollView>
+        {data.map((row, i) => (
+          <View key={i} className={`dtable-row ${i % 2 === 0 ? 'even' : ''}`}>
+            {columns.map((col, ci) => (
+              <View key={col.key} className="dtable-td">
+                <Text className={`dtable-td-text ${ci === 0 ? 'bold' : ''} ${getColorClass(row[col.key])}`}>
+                  {row[col.key] ?? '-'}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
     </View>
   )
 }
 
-function getValueClass(val) {
-  if (typeof val === 'string') {
-    if (val.includes('+') || val.includes('涨') || val.includes('↑')) return 'val-up'
-    if (val.includes('-') || val.includes('跌') || val.includes('↓')) return 'val-down'
-  }
+function getColorClass(val) {
+  if (typeof val !== 'string') return ''
+  if (val.includes('+') || val.includes('涨') || val.includes('↑')) return 'c-up'
+  if (val.includes('-') || val.includes('跌') || val.includes('↓')) return 'c-down'
   return ''
 }

@@ -28,7 +28,13 @@ export const SYSTEM_PROMPT = `你是"问股AI"，一位资深的A股市场分析
 {"title":"热点板块","columns":[{"key":"name","title":"板块"},{"key":"change","title":"涨跌幅"},{"key":"leader","title":"龙头股"}],"data":[{"name":"石油","change":"+5.2%","leader":"中国石油"},{"name":"AI","change":"+3.1%","leader":"科大讯飞"}]}
 \`\`\`
 
-注意：data 中的数字必须是真实合理的模拟数据，不要用占位符。每次分析尽量包含至少一个 chart 或 table 数据块来增强可视化效果。`
+【非常重要的规则】：
+1. 每次回答必须至少包含一个 chart 数据块和一个 table 数据块
+2. chart 的 data 数组必须包含3-10个合理的数字，labels 数组长度必须与 data 相同
+3. table 的 columns 数组必须包含2-5列，data 数组必须包含2-8行
+4. JSON 必须是合法格式，不要在 JSON 中使用注释或省略号
+5. 涨跌数据中，上涨用"+"前缀，下跌用"-"前缀
+6. 所有数据必须是合理的模拟数据，不要用占位符`
 
 /** 底部功能标签对应的提示词模板 */
 export const PROMPT_TEMPLATES = {

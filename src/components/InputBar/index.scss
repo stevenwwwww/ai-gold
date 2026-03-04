@@ -1,46 +1,65 @@
-.input-bar {
+.ibar {
   padding: 12rpx 24rpx 16rpx;
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
-
-.input-bar-inner {
+.ibar-inner {
   display: flex;
   align-items: center;
-  background: #F5F5F5;
+  background: var(--c-input, #F0F1F5);
   border-radius: 44rpx;
   padding: 8rpx 8rpx 8rpx 28rpx;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1rpx solid var(--c-b2, #F3F4F6);
+  transition: border-color 0.2s ease;
 }
-
-.input-bar-input {
+.ibar-input {
   flex: 1;
+  min-width: 0;
   height: 72rpx;
   font-size: 28rpx;
-  color: #333;
+  color: var(--c-t1, #1A1D26);
   background: transparent;
 }
-
-.input-placeholder {
-  color: #CCC;
+.ibar-placeholder { color: var(--c-t3, #9CA3AF); }
+.ibar-extra {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8rpx;
+  flex-shrink: 0;
 }
-
-.input-bar-send {
+.ibar-plus {
+  font-size: 36rpx;
+  color: var(--c-t3, #9CA3AF);
+  font-weight: 300;
+}
+.ibar-send {
   width: 64rpx;
   height: 64rpx;
   border-radius: 50%;
-  background: #E0E0E0;
+  background: var(--c-b1, #E5E7EB);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
 
-  &.active {
-    background: #FF4757;
+  &.ibar-send-active {
+    background: linear-gradient(135deg, #6366F1, #818CF8);
+    box-shadow: 0 4rpx 16rpx rgba(99, 102, 241, 0.3);
   }
 }
-
-.send-arrow {
+.ibar-arrow {
   width: 0;
   height: 0;
-  border-left: 16rpx solid #FFFFFF;
+  border-left: 16rpx solid #FFF;
   border-top: 10rpx solid transparent;
   border-bottom: 10rpx solid transparent;
   margin-left: 4rpx;

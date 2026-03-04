@@ -1,61 +1,81 @@
 /**
  * AI 回复内容解析器
- * 解析回复中的 JSON 数据块，渲染为图表或表格
- * 
- * AI 回复中嵌入结构化数据格式：
- * ```chart
- * { "title": "...", "data": [1,2,3], "labels": ["a","b","c"], "color": "auto" }
- * ```
- * 
- * ```table
- * { "title": "...", "columns": [...], "data": [...] }
- * ```
+ * 增强容错：支持多种 JSON 格式变体
  */
 
-const CHART_REGEX = /```chart\s*\n([\s\S]*?)```/g
-const TABLE_REGEX = /```table\s*\n([\s\S]*?)```/g
+const BLOCK_REGEX = /```(chart|table)\s*\n?([\s\S]*?)```/g
+
+function tryParseJSON(raw) {
+  const cleaned = raw
+    .trim()
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*]/g, ']')
+    .replace(/'/g, '"')
+    .replace(/\n/g, ' ')
+
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      try { return JSON.parse(jsonMatch[0]) } catch { /* skip */ }
+    }
+    return null
+  }
+}
+
+function validateChart(data) {
+  if (!data || !Array.isArray(data.data) || data.data.length === 0) return false
+  if (data.data.some((d) => typeof d !== 'number')) return false
+  return true
+}
+
+function validateTable(data) {
+  if (!data || !Array.isArray(data.columns) || !Array.isArray(data.data)) return false
+  if (data.columns.length === 0 || data.data.length === 0) return false
+  if (!data.columns[0].key || !data.columns[0].title) return false
+  return true
+}
 
 export function parseContent(text) {
-  if (!text) return [{ type: 'text', content: text || '' }]
+  if (!text) return [{ type: 'text', content: '' }]
 
   const segments = []
   let lastIndex = 0
-  const allMatches = []
+  const re = new RegExp(BLOCK_REGEX.source, 'g')
+  let match
 
-  let m
-  const chartRe = new RegExp(CHART_REGEX.source, 'g')
-  while ((m = chartRe.exec(text)) !== null) {
-    allMatches.push({ index: m.index, end: m.index + m[0].length, type: 'chart', raw: m[1] })
-  }
-
-  const tableRe = new RegExp(TABLE_REGEX.source, 'g')
-  while ((m = tableRe.exec(text)) !== null) {
-    allMatches.push({ index: m.index, end: m.index + m[0].length, type: 'table', raw: m[1] })
-  }
-
-  allMatches.sort((a, b) => a.index - b.index)
-
-  if (allMatches.length === 0) {
-    return [{ type: 'text', content: text }]
-  }
-
-  for (const match of allMatches) {
+  while ((match = re.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ type: 'text', content: text.slice(lastIndex, match.index) })
+      const before = text.slice(lastIndex, match.index).trim()
+      if (before) segments.push({ type: 'text', content: before })
     }
 
-    try {
-      const parsed = JSON.parse(match.raw.trim())
-      segments.push({ type: match.type, data: parsed })
-    } catch {
-      segments.push({ type: 'text', content: match.raw })
+    const type = match[1]
+    const raw = match[2]
+    const parsed = tryParseJSON(raw)
+
+    if (type === 'chart' && parsed && validateChart(parsed)) {
+      if (parsed.labels && parsed.labels.length !== parsed.data.length) {
+        parsed.labels = parsed.data.map((_, i) => parsed.labels?.[i] || `${i + 1}`)
+      }
+      segments.push({ type: 'chart', data: parsed })
+    } else if (type === 'table' && parsed && validateTable(parsed)) {
+      segments.push({ type: 'table', data: parsed })
+    } else {
+      segments.push({ type: 'text', content: raw })
     }
 
-    lastIndex = match.end
+    lastIndex = match.index + match[0].length
   }
 
   if (lastIndex < text.length) {
-    segments.push({ type: 'text', content: text.slice(lastIndex) })
+    const remaining = text.slice(lastIndex).trim()
+    if (remaining) segments.push({ type: 'text', content: remaining })
+  }
+
+  if (segments.length === 0) {
+    return [{ type: 'text', content: text }]
   }
 
   return segments

@@ -1,4 +1,5 @@
 import { useLaunch } from '@tarojs/taro'
+import ThemeProvider from '@/components/ThemeProvider'
 import './app.scss'
 
 function App({ children }) {
@@ -6,7 +7,7 @@ function App({ children }) {
     console.log('[App] launched')
   })
 
-  return children
+  return <ThemeProvider>{children}</ThemeProvider>
 }
 
 export default App
