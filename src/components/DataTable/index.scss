@@ -5,6 +5,7 @@
   border: 1rpx solid var(--c-b2, #F3F4F6);
   overflow: hidden;
   width: 100%;
+  min-width: 0; /* 允许在 flex 父级中正确收缩 */
   box-sizing: border-box;
 }
 .dtable-head { padding: 20rpx 24rpx 12rpx; }
@@ -15,32 +16,48 @@
 }
 .dtable-wrap {
   width: 100%;
+  min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .dtable-header {
   display: flex;
+  flex-wrap: nowrap;
   background: var(--c-red-bg, #FFF5F5);
   border-bottom: 1rpx solid var(--c-red-light, #FEE2E2);
 }
-.dtable-th { flex: 1; padding: 16rpx; min-width: 120rpx; }
+.dtable-th {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12rpx 8rpx;
+}
 .dtable-th-text {
   font-size: 22rpx;
   font-weight: 600;
   color: var(--c-red, #E63946);
+  display: block;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 .dtable-row {
   display: flex;
+  flex-wrap: nowrap;
   border-bottom: 1rpx solid var(--c-b2, #F3F4F6);
 
   &.even { background: var(--c-bg, #F5F6FA); }
   &:last-child { border-bottom: none; }
 }
-.dtable-td { flex: 1; padding: 14rpx 16rpx; min-width: 120rpx; }
+.dtable-td {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12rpx 8rpx;
+}
 .dtable-td-text {
   font-size: 24rpx;
   color: var(--c-t1, #1A1D26);
-  word-break: break-word;
+  display: block;
+  word-break: break-all;
+  overflow-wrap: break-word;
 
   &.bold { font-weight: 600; }
   &.c-up { color: var(--c-up, #EF4444); font-weight: 600; }

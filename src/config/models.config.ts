@@ -12,12 +12,12 @@ export interface ModelConfig {
   enabled: boolean
 }
 
-/** 千问 DashScope API - 兼容 OpenAI 格式 */
+/** 千问 DashScope API - 兼容 OpenAI 格式，支持流式返回 */
 export const qwenConfig: ModelConfig = {
   id: 'qwen',
   name: '通义千问',
   apiKey: 'sk-557e3b0301ea460cb13e5160d1fcf897',
-  modelName: 'qwen-plus', // 与 curl 示例一致，可改为 qwen-turbo、Qwen3-VL-Plus 等
+  modelName: 'qwen-plus', // qwen-turbo 更快，qwen-plus 质量更好
   baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   enabled: true
 }

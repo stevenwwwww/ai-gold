@@ -1,6 +1,6 @@
 /**
  * 对话服务 - 管理消息列表、调用模型、缓存历史
- * 每个 ChatService 实例代表一个独立会话
+ * 支持流式返回，逐字更新 UI 提升体验
  */
 import { getModelService } from '@/services/model/ModelService'
 import { getHistoryService } from '@/services/history/HistoryService'
@@ -47,17 +47,39 @@ export class ChatService {
       .filter((m) => !m.loading && !m.error)
       .map((m) => ({ role: m.role, content: m.content }))
 
+    const lastIdx = this.messages.length - 1
+
     try {
-      const res = await modelService.chat({ messages: [...history] })
-      this.messages = this.messages.map((m, i) =>
-        m.loading && i === this.messages.length - 1
-          ? { ...m, content: res.content, loading: false }
-          : m
-      )
+      const provider = modelService.getProvider()
+      if (provider.chatStream) {
+        // 流式返回：逐 chunk 更新 UI
+        let fullContent = ''
+        for await (const chunk of modelService.chatStream({ messages: [...history] })) {
+          fullContent += chunk
+          this.messages = this.messages.map((m, i) =>
+            m.loading && i === lastIdx
+              ? { ...m, content: fullContent, loading: true }
+              : m
+          )
+          this.notify()
+        }
+        this.messages = this.messages.map((m, i) =>
+          m.loading && i === lastIdx
+            ? { ...m, content: fullContent, loading: false }
+            : m
+        )
+      } else {
+        const res = await modelService.chat({ messages: [...history] })
+        this.messages = this.messages.map((m, i) =>
+          m.loading && i === lastIdx
+            ? { ...m, content: res.content, loading: false }
+            : m
+        )
+      }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : '请求失败'
       this.messages = this.messages.map((m, i) =>
-        m.loading && i === this.messages.length - 1
+        m.loading && i === lastIdx
           ? { ...m, content: '', loading: false, error: errMsg }
           : m
       )
@@ -78,7 +100,10 @@ export class ChatService {
 
     let userIdx = -1
     for (let i = idx - 1; i >= 0; i--) {
-      if (this.messages[i].role === 'user') { userIdx = i; break }
+      if (this.messages[i].role === 'user') {
+        userIdx = i
+        break
+      }
     }
     if (userIdx < 0) return
 
@@ -95,12 +120,25 @@ export class ChatService {
       .map((m) => ({ role: m.role, content: m.content }))
     const fullHistory = [...history, { role: 'user' as const, content: userContent }]
 
+    const lastIdx = idx
+
     try {
-      const res = await modelService.chat({ messages: fullHistory })
-      this.messages[idx] = { ...failedMsg, content: res.content, loading: false, error: undefined }
+      const provider = modelService.getProvider()
+      if (provider.chatStream) {
+        let fullContent = ''
+        for await (const chunk of modelService.chatStream({ messages: fullHistory })) {
+          fullContent += chunk
+          this.messages[idx] = { ...failedMsg, content: fullContent, loading: true, error: undefined }
+          this.notify()
+        }
+        this.messages[lastIdx] = { ...failedMsg, content: fullContent, loading: false, error: undefined }
+      } else {
+        const res = await modelService.chat({ messages: fullHistory })
+        this.messages[lastIdx] = { ...failedMsg, content: res.content, loading: false, error: undefined }
+      }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : '请求失败'
-      this.messages[idx] = { ...failedMsg, content: '', loading: false, error: errMsg }
+      this.messages[lastIdx] = { ...failedMsg, content: '', loading: false, error: errMsg }
     }
     this.notify()
     this.persistSession()
@@ -146,7 +184,6 @@ export class ChatService {
 
 /**
  * 每次调用都创建全新会话实例
- * Chat 页面 useEffect 中调用此函数
  */
 export function createChatService(): ChatService {
   return new ChatService()

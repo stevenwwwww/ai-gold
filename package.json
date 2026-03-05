@@ -9,7 +9,12 @@
     "build:h5": "taro build --type h5",
     "dev:weapp": "yarn build:weapp --watch",
     "dev:alipay": "yarn build:alipay --watch",
-    "dev:h5": "yarn build:h5 --watch"
+    "dev:h5": "yarn build:h5 --watch",
+    "server": "cd server && yarn dev",
+    "server:install": "cd server && yarn install",
+    "web": "cd web && yarn dev",
+    "web:build": "cd web && yarn build",
+    "web:install": "cd web && yarn install"
   },
   "browserslist": [
     "last 3 versions",

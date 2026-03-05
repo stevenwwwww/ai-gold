@@ -130,6 +130,36 @@
   font-weight: 500;
 }
 
+/* ===== 研报分析入口 ===== */
+.hp-report-cta {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 28rpx 24rpx;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.08));
+  border: 1rpx solid rgba(99, 102, 241, 0.2);
+  border-radius: 20rpx;
+}
+.hp-report-cta-icon { font-size: 48rpx; }
+.hp-report-cta-info { flex: 1; min-width: 0; }
+.hp-report-cta-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--c-t1, #1A1D26);
+  display: block;
+}
+.hp-report-cta-sub {
+  font-size: 24rpx;
+  color: var(--c-t2, #6B7280);
+  margin-top: 4rpx;
+  display: block;
+}
+.hp-report-cta-arrow {
+  font-size: 36rpx;
+  color: var(--c-t3, #9CA3AF);
+  font-weight: 300;
+}
+
 /* ===== News (仿问财列表) ===== */
 .hp-loading {
   display: flex;

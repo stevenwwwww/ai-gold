@@ -74,17 +74,53 @@ yarn dev:h5
 yarn build:h5
 ```
 
+## 研报分析（需后端）
+
+研报分析功能依赖 Node 后端（Express + SQLite），数据持久化在服务端。
+
+```bash
+cd server
+cp .env.example .env   # 填入 QWEN_API_KEY
+yarn install
+yarn dev               # http://localhost:3000
+```
+
+小程序开发时需在微信开发者工具中勾选「不校验合法域名」，以便访问本地后端。
+详细 API 文档见 `server/README.md`。
+
 ## 项目结构
 
-- `src/pages/` - 页面（首页、对话页、设置页）
-- `src/components/` - 通用组件（ChatBubble、InputBar、ModelSelector 等）
-- `src/services/` - 业务服务（chat、model、auth、knowledge、audit）
-- `src/providers/` - 模型提供者（DeepSeek、千问、本地预留）
-- `src/config/` - 配置文件（models.config.ts - 模型 API Key 配置）
-- `src/utils/` - 工具与平台适配
+```
+miniApp/
+├── src/                    # 前端（Taro + React）
+│   ├── pages/
+│   │   ├── index/          # 首页
+│   │   ├── chat/           # 通用对话
+│   │   ├── report/         # 研报分析
+│   │   │   ├── entry/      # 导入入口
+│   │   │   ├── summary/    # 一页纸摘要
+│   │   │   ├── chat/       # 研报问答
+│   │   │   └── list/       # 我的研报
+│   │   ├── settings/       # 设置
+│   │   └── history/        # 对话历史
+│   ├── services/           # 业务服务
+│   ├── components/         # 通用组件
+│   └── providers/          # 模型提供者
+├── server/                 # 后端（Express + SQLite）
+│   ├── src/
+│   │   ├── config/         # 配置（环境变量 + 模型注册）
+│   │   ├── db/             # 数据库初始化
+│   │   ├── routes/         # API 路由
+│   │   ├── services/       # 业务逻辑
+│   │   └── middleware/     # 中间件
+│   └── data/               # SQLite 数据文件
+└── config/                 # Taro 构建配置
+```
 
 ## 功能特性
 
+- ✅ 研报分析：上传 PDF / 粘贴文本 → 一页纸摘要 → 智能问答
+- ✅ 数据持久化（SQLite，研报 + 聊天记录）
 - ✅ 多模型支持（千问、DeepSeek，预留本地模型）
 - ✅ 配置文件化管理（在 `models.config.ts` 中配置 API Key）
 - ✅ 简洁优美的 UI 设计（白色主调）

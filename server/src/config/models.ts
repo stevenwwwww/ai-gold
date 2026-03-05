@@ -24,6 +24,18 @@ export const modelConfigs: Record<string, ModelConfig> = {
     baseUrl: QWEN_BASE_URL,
     modelName: 'qwen-turbo',
   },
+  'qwen-vl-max': {
+    id: 'qwen',
+    name: '通义千问VL（高精度）',
+    baseUrl: QWEN_BASE_URL,
+    modelName: 'qwen-vl-max',
+  },
+  'qwen-vl-plus': {
+    id: 'qwen',
+    name: '通义千问VL（低成本）',
+    baseUrl: QWEN_BASE_URL,
+    modelName: 'qwen-vl-plus',
+  },
   'deepseek-chat': {
     id: 'deepseek',
     name: 'DeepSeek',

@@ -1,41 +1,37 @@
 /**
- * 摘要路由 - POST /api/summary
- * 传入 reportId，从数据库取原文 → 生成摘要 → 回写数据库
+ * 摘要路由
+ * POST /api/summary      - 一页纸摘要（小程序用）
+ * POST /api/deep-analysis - 6维度深度分析（Web端用，含图表数据）
  */
 import { Router, Request, Response } from 'express'
 import { generateSummary } from '../services/summaryService'
-import { getReport, updateReportSummary } from '../services/reportStore'
+import { generateDeepAnalysis } from '../services/deepAnalysisService'
+import { getReport, updateReportSummary, updateReportStatus } from '../services/reportStore'
+import { getDb } from '../db'
 
 export const summaryRouter = Router()
 
 summaryRouter.post('/summary', async (req: Request, res: Response) => {
   try {
     const { reportId, text } = req.body || {}
-
     let rawText = ''
 
-    // 优先用 reportId 从数据库取
     if (reportId) {
       const report = getReport(reportId)
-      if (!report) {
-        return res.status(404).json({ success: false, error: '研报不存在' })
-      }
+      if (!report) { res.status(404).json({ success: false, error: '研报不存在' }); return }
       rawText = report.rawText
     } else if (typeof text === 'string' && text.trim()) {
       rawText = text.trim()
     } else {
-      return res.status(400).json({ success: false, error: 'reportId 或 text 必填' })
+      res.status(400).json({ success: false, error: 'reportId 或 text 必填' }); return
     }
 
-    const summary = await generateSummary(rawText)
+    const summary = await generateSummary(rawText, reportId)
 
-    // 如果有 reportId，把摘要回写到数据库
     if (reportId) {
       updateReportSummary(reportId, summary as Record<string, unknown>)
-      // 用摘要中的标题更新研报标题
       const title = summary.reportTitle || summary.stockName
       if (title) {
-        const { getDb } = await import('../db')
         getDb().prepare('UPDATE reports SET title = ?, updated_at = ? WHERE id = ?')
           .run(title.slice(0, 100), Date.now(), reportId)
       }
@@ -44,6 +40,41 @@ summaryRouter.post('/summary', async (req: Request, res: Response) => {
     res.json({ success: true, reportId, summary })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '摘要生成失败'
+    res.status(500).json({ success: false, error: msg })
+  }
+})
+
+summaryRouter.post('/deep-analysis', async (req: Request, res: Response) => {
+  try {
+    const { reportId } = req.body || {}
+    if (!reportId) {
+      res.status(400).json({ success: false, error: 'reportId 必填' }); return
+    }
+
+    const report = getReport(reportId)
+    if (!report) {
+      res.status(404).json({ success: false, error: '研报不存在' }); return
+    }
+
+    const analysis = await generateDeepAnalysis(
+      report.rawText,
+      reportId,
+      report.structuredContent
+    )
+
+    const combined = { ...(report.summary || {}), deepAnalysis: analysis }
+    updateReportSummary(reportId, combined)
+    updateReportStatus(reportId, 'analyzed')
+
+    const title = analysis.companyOverview?.name || analysis.summary?.coreLogic?.slice(0, 50)
+    if (title) {
+      getDb().prepare('UPDATE reports SET title = ?, updated_at = ? WHERE id = ?')
+        .run(title.slice(0, 100), Date.now(), reportId)
+    }
+
+    res.json({ success: true, reportId, analysis })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '深度分析失败'
     res.status(500).json({ success: false, error: msg })
   }
 })

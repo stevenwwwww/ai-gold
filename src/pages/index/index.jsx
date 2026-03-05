@@ -107,6 +107,21 @@ export default function Index() {
           )}
         </View>
 
+        {/* 研报分析入口 */}
+        <View className="hp-sec">
+          <View
+            className="hp-report-cta"
+            onClick={() => Taro.navigateTo({ url: '/pages/report/entry/index' })}
+          >
+            <Text className="hp-report-cta-icon">📄</Text>
+            <View className="hp-report-cta-info">
+              <Text className="hp-report-cta-title">研报分析</Text>
+              <Text className="hp-report-cta-sub">上传 PDF 或粘贴文本，秒级生成一页纸摘要</Text>
+            </View>
+            <Text className="hp-report-cta-arrow">›</Text>
+          </View>
+        </View>
+
         {/* 智能分析 */}
         <View className="hp-sec">
           <Text className="hp-sec-title">智能分析</Text>

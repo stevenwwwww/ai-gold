@@ -1,0 +1,103 @@
+.report-list {
+  min-height: 100vh;
+  background: var(--c-bg, #F5F6FA);
+  display: flex;
+  flex-direction: column;
+}
+
+.report-list-header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 24rpx 32rpx;
+  background: var(--c-surface, #FFF);
+  border-bottom: 1rpx solid var(--c-b2, #F3F4F6);
+}
+
+.report-list-search {
+  flex: 1;
+  height: 72rpx;
+  padding: 0 24rpx;
+  background: var(--c-input, #F0F1F5);
+  border-radius: 16rpx;
+  font-size: 28rpx;
+}
+
+.report-list-add {
+  padding: 16rpx 28rpx;
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #FFF;
+}
+
+.report-list-body {
+  flex: 1;
+  padding: 24rpx;
+}
+
+.report-list-empty {
+  padding: 80rpx 48rpx;
+  text-align: center;
+}
+
+.report-list-empty-hint {
+  font-size: 26rpx;
+  color: var(--c-t2, #6B7280);
+  margin-top: 12rpx;
+  display: block;
+}
+
+.report-list-empty-btn {
+  margin-top: 32rpx;
+  padding: 24rpx 48rpx;
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  border-radius: 16rpx;
+  display: inline-block;
+  font-size: 28rpx;
+  color: #FFF;
+  font-weight: 600;
+}
+
+.report-list-item {
+  display: flex;
+  align-items: center;
+  padding: 32rpx;
+  background: var(--c-card, #FFF);
+  border-radius: 20rpx;
+  margin-bottom: 20rpx;
+  border: 1rpx solid var(--c-b2, #F3F4F6);
+}
+
+.report-list-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.report-list-item-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--c-t1, #1A1D26);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-list-item-time {
+  font-size: 24rpx;
+  color: var(--c-t3, #9CA3AF);
+  margin-top: 8rpx;
+  display: block;
+}
+
+.report-list-item-del {
+  flex-shrink: 0;
+  padding: 12rpx 24rpx;
+  font-size: 24rpx;
+  color: #EF4444;
+  border: 1rpx solid #FECACA;
+  border-radius: 12rpx;
+  margin-left: 16rpx;
+}

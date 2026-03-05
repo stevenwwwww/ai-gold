@@ -4,11 +4,18 @@
 import { app } from './app'
 import { config } from './config'
 import { closeDb } from './db'
+import { ensureDefaultAdmin } from './services/userStore'
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, async () => {
   console.log(`[Server] Running at http://localhost:${config.port}`)
   console.log(`[Server] Environment: ${config.nodeEnv}`)
   console.log(`[Server] DB: ${config.dbPath}`)
+
+  try {
+    await ensureDefaultAdmin(config.adminUsername, config.adminPassword)
+  } catch (e) {
+    console.error('[Server] 初始化超管账号失败:', e)
+  }
 })
 
 server.on('error', (err: NodeJS.ErrnoException) => {

@@ -6,6 +6,8 @@ import { v4 as uuid } from 'uuid'
 import { getDb } from '../db'
 
 /* ---------- Types ---------- */
+export type ReportStatus = 'pending' | 'parsing' | 'analyzed' | 'error'
+
 export interface Report {
   id: string
   title: string
@@ -13,6 +15,8 @@ export interface Report {
   rawText: string
   pages: number
   summary: Record<string, unknown> | null
+  structuredContent: Record<string, unknown> | null
+  status: ReportStatus
   createdAt: number
   updatedAt: number
 }
@@ -23,6 +27,8 @@ export interface CreateReportInput {
   rawText: string
   pages?: number
   summary?: Record<string, unknown>
+  structuredContent?: Record<string, unknown>
+  status?: ReportStatus
 }
 
 export interface ChatRecord {
@@ -38,19 +44,24 @@ export function createReport(input: CreateReportInput): Report {
   const db = getDb()
   const id = uuid()
   const now = Date.now()
+  const status = input.status ?? 'pending'
   db.prepare(`
-    INSERT INTO reports (id, title, source, raw_text, pages, summary_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO reports (id, title, source, raw_text, pages, summary_json, structured_content, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, input.title, input.source, input.rawText,
     input.pages ?? 0,
     input.summary ? JSON.stringify(input.summary) : null,
+    input.structuredContent ? JSON.stringify(input.structuredContent) : null,
+    status,
     now, now
   )
   return {
     id, title: input.title, source: input.source,
     rawText: input.rawText, pages: input.pages ?? 0,
     summary: input.summary ?? null,
+    structuredContent: input.structuredContent ?? null,
+    status,
     createdAt: now, updatedAt: now
   }
 }
@@ -72,6 +83,86 @@ export function updateReportSummary(id: string, summary: Record<string, unknown>
   const db = getDb()
   db.prepare('UPDATE reports SET summary_json = ?, updated_at = ? WHERE id = ?')
     .run(JSON.stringify(summary), Date.now(), id)
+}
+
+/** 更新结构化内容（视觉解析结果） */
+export function updateStructuredContent(id: string, content: Record<string, unknown>): void {
+  const db = getDb()
+  db.prepare('UPDATE reports SET structured_content = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(content), Date.now(), id)
+}
+
+/** 更新研报状态 */
+export function updateReportStatus(id: string, status: ReportStatus): void {
+  const db = getDb()
+  db.prepare('UPDATE reports SET status = ?, updated_at = ? WHERE id = ?')
+    .run(status, Date.now(), id)
+}
+
+/** 更新研报标题 */
+export function updateReportTitle(id: string, title: string): void {
+  const db = getDb()
+  db.prepare('UPDATE reports SET title = ?, updated_at = ? WHERE id = ?')
+    .run(title.slice(0, 200), Date.now(), id)
+}
+
+/** 统计研报数据 */
+export function getReportStats(): {
+  total: number; analyzed: number; pending: number; avgScore: number; thisMonth: number
+} {
+  const db = getDb()
+  const total = (db.prepare('SELECT COUNT(*) as cnt FROM reports').get() as { cnt: number }).cnt
+  const analyzed = (db.prepare("SELECT COUNT(*) as cnt FROM reports WHERE status = 'analyzed'").get() as { cnt: number }).cnt
+  const pending = (db.prepare("SELECT COUNT(*) as cnt FROM reports WHERE status = 'pending' OR status = 'parsing'").get() as { cnt: number }).cnt
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+  const thisMonth = (db.prepare('SELECT COUNT(*) as cnt FROM reports WHERE created_at >= ?').get(monthStart.getTime()) as { cnt: number }).cnt
+
+  const scoreRow = db.prepare(`
+    SELECT AVG(json_extract(json_extract(summary_json, '$.deepAnalysis'), '$.summary.score')) as avg
+    FROM reports WHERE summary_json IS NOT NULL
+  `).get() as { avg: number | null }
+  const avgScore = Math.round((scoreRow.avg ?? 0) * 10) / 10
+
+  return { total, analyzed, pending, avgScore, thisMonth }
+}
+
+/** 获取研报总数 */
+export function countReports(keyword?: string): number {
+  const db = getDb()
+  if (keyword) {
+    const kw = `%${keyword}%`
+    return (db.prepare('SELECT COUNT(*) as cnt FROM reports WHERE title LIKE ?').get(kw) as { cnt: number }).cnt
+  }
+  return (db.prepare('SELECT COUNT(*) as cnt FROM reports').get() as { cnt: number }).cnt
+}
+
+/** 带搜索参数的列表查询 */
+export function searchReports(opts: {
+  keyword?: string; status?: string; limit?: number; offset?: number; sortBy?: string
+}): Report[] {
+  const db = getDb()
+  const conditions: string[] = []
+  const params: unknown[] = []
+
+  if (opts.keyword) {
+    conditions.push('title LIKE ?')
+    params.push(`%${opts.keyword}%`)
+  }
+  if (opts.status) {
+    conditions.push('status = ?')
+    params.push(opts.status)
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const orderBy = opts.sortBy === 'score'
+    ? 'ORDER BY json_extract(json_extract(summary_json, \'$.deepAnalysis\'), \'$.summary.score\') DESC NULLS LAST, updated_at DESC'
+    : 'ORDER BY updated_at DESC'
+  const limit = Math.min(opts.limit ?? 50, 200)
+  const offset = Math.max(opts.offset ?? 0, 0)
+
+  const rows = db.prepare(`SELECT * FROM reports ${where} ${orderBy} LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset) as Record<string, unknown>[]
+  return rows.map(rowToReport)
 }
 
 export function deleteReport(id: string): boolean {
@@ -111,6 +202,10 @@ function rowToReport(row: Record<string, unknown>): Report {
   if (typeof row.summary_json === 'string') {
     try { summary = JSON.parse(row.summary_json) } catch { /* keep null */ }
   }
+  let structuredContent: Record<string, unknown> | null = null
+  if (typeof row.structured_content === 'string') {
+    try { structuredContent = JSON.parse(row.structured_content) } catch { /* keep null */ }
+  }
   return {
     id: String(row.id),
     title: String(row.title),
@@ -118,6 +213,8 @@ function rowToReport(row: Record<string, unknown>): Report {
     rawText: String(row.raw_text),
     pages: Number(row.pages),
     summary,
+    structuredContent,
+    status: (String(row.status || 'pending')) as ReportStatus,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   }

@@ -68,6 +68,7 @@
 }
 .bubble-rich {
   width: 100%;
+  min-width: 0; /* 允许内部表格在 flex 布局中正确适配 */
   overflow: hidden;
 }
 .bubble-error {

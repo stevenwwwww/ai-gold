@@ -4,8 +4,10 @@
  */
 import Taro from '@tarojs/taro'
 
-/** 当前平台 */
-export const platform = process.env.TARO_ENV || 'weapp'
+/** 当前平台（TARO_ENV 由 Taro 编译时注入） */
+export const platform = typeof process !== 'undefined' && process.env?.TARO_ENV
+  ? process.env.TARO_ENV
+  : 'weapp'
 
 /** 是否为微信小程序 */
 export const isWeapp = platform === 'weapp'

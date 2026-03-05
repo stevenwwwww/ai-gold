@@ -2,7 +2,9 @@ module.exports = {
   env: {
     NODE_ENV: '"production"'
   },
-  defineConstants: {},
+  defineConstants: {
+    REPORT_API_BASE: JSON.stringify('https://api.example.com')
+  },
   mini: {},
   h5: {
     /**
