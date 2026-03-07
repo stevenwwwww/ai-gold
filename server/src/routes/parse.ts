@@ -187,7 +187,7 @@ async function pollParsingStatus(
       const progress = doc.progress ?? 0
       console.log(`[Parse] RAGFlow 解析进度: ${(progress * 100).toFixed(0)}% (${doc.run})`)
 
-      if (doc.run === '2' || progress >= 1) {
+      if (doc.run === '2' || doc.run?.toUpperCase() === 'DONE' || progress >= 1) {
         if (doc.progress_msg && doc.progress_msg.toLowerCase().includes('error')) {
           console.error(`[Parse] RAGFlow 解析出错: ${doc.progress_msg}`)
           updateReportStatus(reportId, 'error')
@@ -198,7 +198,7 @@ async function pollParsingStatus(
         return
       }
 
-      if (doc.run === '3') {
+      if (doc.run === '3' || doc.run?.toUpperCase() === 'CANCEL') {
         console.warn('[Parse] RAGFlow 解析被取消')
         updateReportStatus(reportId, 'error')
         return

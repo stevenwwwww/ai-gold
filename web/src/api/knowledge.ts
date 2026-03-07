@@ -41,6 +41,8 @@ export interface Chunk {
   dataset_id: string
   similarity: number
   positions: number[][]
+  img_id?: string
+  highlight?: string
 }
 
 export interface ChatAssistant {
@@ -151,6 +153,12 @@ export async function retrievalTest(data: {
 
 export function getDocumentDownloadUrl(datasetId: string, documentId: string): string {
   return `/api/knowledge/datasets/${datasetId}/documents/${documentId}/download`
+}
+
+/* ========== Chunk Image ========== */
+
+export function getChunkImageUrl(imageId: string): string {
+  return `/api/knowledge/chunk-image/${imageId}`
 }
 
 /* ========== Chat Assistant ========== */

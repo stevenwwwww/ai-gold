@@ -12,13 +12,13 @@ import React, { useState, useEffect, useCallback } from 'react'
 import {
   Card, Table, Button, Space, Modal, Form, Input, Select,
   Upload, message, Tag, Tabs, Progress, Descriptions, Typography,
-  Popconfirm, Empty, Spin, Badge, Tooltip, Row, Col, Statistic,
+  Popconfirm, Empty, Spin, Badge, Tooltip, Row, Col, Statistic, Image,
 } from 'antd'
 import {
   PlusOutlined, DeleteOutlined, UploadOutlined, SearchOutlined,
   ReloadOutlined, DatabaseOutlined, FileTextOutlined, LinkOutlined,
   CheckCircleOutlined, CloseCircleOutlined, SyncOutlined,
-  EyeOutlined, InboxOutlined,
+  EyeOutlined, InboxOutlined, PictureOutlined, EnvironmentOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { UploadFile, UploadProps } from 'antd'
@@ -56,6 +56,11 @@ const KnowledgePage: React.FC = () => {
   const [retrievalResults, setRetrievalResults] = useState<knowledgeApi.Chunk[]>([])
   const [retrievalLoading, setRetrievalLoading] = useState(false)
   const [selectedDsIds, setSelectedDsIds] = useState<string[]>([])
+
+  // PDF preview
+  const [pdfOpen, setPdfOpen] = useState(false)
+  const [pdfIframeSrc, setPdfIframeSrc] = useState('')
+  const [pdfTitle, setPdfTitle] = useState('')
 
   // Chat Assistants
   const [chatAssistants, setChatAssistants] = useState<knowledgeApi.ChatAssistant[]>([])
@@ -180,6 +185,26 @@ const KnowledgePage: React.FC = () => {
     }
   }
 
+  const getPageNumber = (positions: number[][]): number | null => {
+    if (!positions || positions.length === 0) return null
+    const p = positions[0][0]
+    return p >= 1 ? p : p + 1
+  }
+
+  const sanitizeHighlight = (html: string) => html.replace(/<(?!\/?em\b)[^>]*>/gi, '')
+
+  const handleOpenPdf = (chunk: knowledgeApi.Chunk) => {
+    if (!chunk.dataset_id || !chunk.document_id) {
+      message.error('缺少文档信息'); return
+    }
+    const page = getPageNumber(chunk.positions)
+    let url = knowledgeApi.getDocumentDownloadUrl(chunk.dataset_id, chunk.document_id)
+    if (page) url += `#page=${page}`
+    setPdfIframeSrc(url)
+    setPdfTitle(chunk.document_name || '文档')
+    setPdfOpen(true)
+  }
+
   const handleRetrieval = async () => {
     if (!retrievalQuestion.trim()) return
     if (selectedDsIds.length === 0) {
@@ -242,10 +267,14 @@ const KnowledgePage: React.FC = () => {
     },
   ]
 
+  const isRunning = (run: string) => run === '1' || run?.toUpperCase() === 'RUNNING'
+  const isDone = (run: string) => run === '2' || run?.toUpperCase() === 'DONE'
+  const isCancelled = (run: string) => run === '3' || run?.toUpperCase() === 'CANCEL'
+
   const docStatusTag = (doc: knowledgeApi.Document) => {
-    if (doc.run === '1') return <Tag icon={<SyncOutlined spin />} color="processing">解析中</Tag>
-    if (doc.run === '2' && doc.progress >= 1) return <Tag icon={<CheckCircleOutlined />} color="success">已完成</Tag>
-    if (doc.run === '3') return <Tag icon={<CloseCircleOutlined />} color="error">已取消</Tag>
+    if (isRunning(doc.run)) return <Tag icon={<SyncOutlined spin />} color="processing">解析中</Tag>
+    if (isDone(doc.run) && doc.progress >= 1) return <Tag icon={<CheckCircleOutlined />} color="success">已完成</Tag>
+    if (isCancelled(doc.run)) return <Tag icon={<CloseCircleOutlined />} color="error">已取消</Tag>
     if (doc.progress_msg?.toLowerCase().includes('error')) return <Tag color="error">出错</Tag>
     return <Tag>待解析</Tag>
   }
@@ -264,7 +293,7 @@ const KnowledgePage: React.FC = () => {
       title: '解析进度', key: 'progress', width: 160,
       render: (_: unknown, r: knowledgeApi.Document) => (
         <Progress percent={Math.round((r.progress || 0) * 100)} size="small"
-          status={r.run === '1' ? 'active' : undefined} />
+          status={isRunning(r.run) ? 'active' : undefined} />
       ),
     },
     {
@@ -478,18 +507,63 @@ const KnowledgePage: React.FC = () => {
       </Card>
       {retrievalResults.length > 0 && (
         <Card title={`检索结果 (${retrievalResults.length} 个片段)`}>
-          {retrievalResults.map((chunk, idx) => (
-            <Card key={chunk.id} size="small" style={{ marginBottom: 8 }}
-              title={
-                <Space>
-                  <Tag color="blue">#{idx + 1}</Tag>
-                  <Text type="secondary">{chunk.document_name}</Text>
-                  <Tag color="green">相关度 {(chunk.similarity * 100).toFixed(1)}%</Tag>
-                </Space>
-              }>
-              <Text style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{chunk.content}</Text>
-            </Card>
-          ))}
+          <style>{`
+            .chunk-hl em {
+              background-color: #fff3cd;
+              color: #d48806;
+              font-style: normal;
+              font-weight: 600;
+              padding: 0 2px;
+              border-radius: 2px;
+            }
+          `}</style>
+          {retrievalResults.map((chunk, idx) => {
+            const page = getPageNumber(chunk.positions)
+            return (
+              <Card key={chunk.id} size="small" style={{ marginBottom: 8 }} hoverable
+                title={
+                  <Space wrap>
+                    <Tag color="blue">#{idx + 1}</Tag>
+                    <FileTextOutlined />
+                    <Text type="secondary" ellipsis style={{ maxWidth: 280 }}>{chunk.document_name}</Text>
+                    <Tag color="green">相关度 {(chunk.similarity * 100).toFixed(1)}%</Tag>
+                    {page && <Tag color="orange" icon={<EnvironmentOutlined />}>第 {page} 页</Tag>}
+                  </Space>
+                }
+                extra={
+                  <Tooltip title="打开 PDF 定位到原文出处">
+                    <Button type="primary" size="small" icon={<FileTextOutlined />}
+                      onClick={() => handleOpenPdf(chunk)}>
+                      查看原文
+                    </Button>
+                  </Tooltip>
+                }>
+                {chunk.img_id && (
+                  <div style={{ marginBottom: 12 }}>
+                    <Image
+                      src={knowledgeApi.getChunkImageUrl(chunk.img_id)}
+                      alt="图表/表格"
+                      style={{ maxHeight: 240, objectFit: 'contain', borderRadius: 6, border: '1px solid #f0f0f0' }}
+                      placeholder={
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, background: '#fafafa' }}>
+                          <PictureOutlined style={{ fontSize: 24, color: '#bbb' }} />
+                        </div>
+                      }
+                    />
+                    <Tag color="purple" style={{ marginTop: 4 }}><PictureOutlined /> 包含图表/表格</Tag>
+                  </div>
+                )}
+                <div className="chunk-hl">
+                  {chunk.highlight ? (
+                    <div style={{ fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHighlight(chunk.highlight) }} />
+                  ) : (
+                    <Text style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{chunk.content}</Text>
+                  )}
+                </div>
+              </Card>
+            )
+          })}
         </Card>
       )}
       {retrievalResults.length === 0 && !retrievalLoading && retrievalQuestion && (
@@ -582,6 +656,21 @@ const KnowledgePage: React.FC = () => {
             </Select>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* PDF 预览弹窗 */}
+      <Modal
+        open={pdfOpen}
+        title={<><FileTextOutlined /> {pdfTitle}</>}
+        footer={null}
+        onCancel={() => { setPdfOpen(false); setPdfIframeSrc('') }}
+        width="90vw"
+        styles={{ body: { height: '85vh', padding: 0 } }}
+        destroyOnClose
+      >
+        {pdfIframeSrc && (
+          <iframe src={pdfIframeSrc} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF Viewer" />
+        )}
       </Modal>
     </div>
   )

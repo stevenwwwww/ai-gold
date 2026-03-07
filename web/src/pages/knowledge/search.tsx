@@ -1,24 +1,29 @@
 /**
  * 知识库检索页面
  *
- * 完全基于 RAGFlow retrieval API，无额外依赖
+ * 完全基于 RAGFlow retrieval API
  *
  * 功能：
  *   1. 搜索框 → 调用 RAGFlow retrieval API
- *   2. 展示检索结果（片段内容 + 来源文档 + 相关度 + 页码）
- *   3. 点击「查看原文」→ 通过 RAGFlow document download API 用 iframe 打开 PDF，带页码定位
+ *   2. 展示检索结果：文本内容 + 图表/表格图片 + highlight 高亮
+ *   3. 点击「查看原文」→ iframe 打开 PDF，带页码定位 + 搜索高亮
  */
 import React, { useState, useEffect, useCallback } from 'react'
 import {
   Card, Input, Button, Space, Tag, Typography, Empty, Spin,
-  Select, message, Modal, Tooltip, Row, Col, List,
+  Select, message, Modal, Tooltip, Image, List,
 } from 'antd'
 import {
   SearchOutlined, FileTextOutlined, EnvironmentOutlined,
+  PictureOutlined,
 } from '@ant-design/icons'
 import * as knowledgeApi from '../../api/knowledge'
 
-const { Text, Title, Paragraph } = Typography
+const { Text, Title } = Typography
+
+function sanitizeHighlight(html: string): string {
+  return html.replace(/<(?!\/?em\b)[^>]*>/gi, '')
+}
 
 const KnowledgeSearchPage: React.FC = () => {
   const [query, setQuery] = useState('')
@@ -83,13 +88,71 @@ const KnowledgeSearchPage: React.FC = () => {
     const page = getPageNumber(chunk.positions)
     let url = knowledgeApi.getDocumentDownloadUrl(chunk.dataset_id, chunk.document_id)
     if (page) url += `#page=${page}`
+
+    const searchTerm = query.trim().slice(0, 30)
+    if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`
+
     setPdfIframeSrc(url)
     setPdfTitle(chunk.document_name || '文档')
     setPdfOpen(true)
   }
 
+  const renderChunkContent = (chunk: knowledgeApi.Chunk) => {
+    const hasImage = !!chunk.img_id
+    const hasHighlight = !!chunk.highlight
+
+    return (
+      <div>
+        {hasImage && (
+          <div style={{ marginBottom: 12 }}>
+            <Image
+              src={knowledgeApi.getChunkImageUrl(chunk.img_id!)}
+              alt="图表/表格"
+              style={{ maxHeight: 240, objectFit: 'contain', borderRadius: 6, border: '1px solid #f0f0f0' }}
+              placeholder={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, background: '#fafafa' }}>
+                  <PictureOutlined style={{ fontSize: 24, color: '#bbb' }} />
+                </div>
+              }
+              fallback="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjEwMCIgeT0iNjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmaWxsPSIjYmJiIiBmb250LXNpemU9IjE0Ij7lm77niYfliqDovb3lpLHotKU8L3RleHQ+PC9zdmc+"
+            />
+            <Tag color="purple" style={{ marginTop: 4 }}><PictureOutlined /> 包含图表/表格</Tag>
+          </div>
+        )}
+
+        {hasHighlight ? (
+          <div
+            style={{
+              fontSize: 14, lineHeight: 1.8, maxHeight: 200, overflow: 'auto',
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHighlight(chunk.highlight!) }}
+          />
+        ) : (
+          <div style={{
+            fontSize: 14, lineHeight: 1.8, maxHeight: 200, overflow: 'auto',
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          }}>
+            {chunk.content}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div style={{ padding: 24 }}>
+      <style>{`
+        .chunk-highlight em {
+          background-color: #fff3cd;
+          color: #d48806;
+          font-style: normal;
+          font-weight: 600;
+          padding: 0 2px;
+          border-radius: 2px;
+        }
+      `}</style>
+
       <Title level={3} style={{ marginBottom: 24 }}>
         <SearchOutlined /> 知识库检索
       </Title>
@@ -154,7 +217,7 @@ const KnowledgeSearchPage: React.FC = () => {
               return (
                 <Card size="small" style={{ marginBottom: 12 }} hoverable
                   title={
-                    <Space>
+                    <Space wrap>
                       <Tag color="blue">#{idx + 1}</Tag>
                       <FileTextOutlined />
                       <Text ellipsis style={{ maxWidth: 300 }}>{chunk.document_name}</Text>
@@ -170,9 +233,9 @@ const KnowledgeSearchPage: React.FC = () => {
                       </Button>
                     </Tooltip>
                   }>
-                  <Paragraph style={{ fontSize: 14, lineHeight: 1.8, whiteSpace: 'pre-wrap', margin: 0, maxHeight: 200, overflow: 'auto' }}>
-                    {chunk.content}
-                  </Paragraph>
+                  <div className="chunk-highlight">
+                    {renderChunkContent(chunk)}
+                  </div>
                 </Card>
               )
             }}
@@ -185,8 +248,8 @@ const KnowledgeSearchPage: React.FC = () => {
         title={<><FileTextOutlined /> {pdfTitle}</>}
         footer={null}
         onCancel={() => { setPdfOpen(false); setPdfIframeSrc('') }}
-        width="85vw"
-        styles={{ body: { height: '80vh', padding: 0 } }}
+        width="90vw"
+        styles={{ body: { height: '85vh', padding: 0 } }}
         destroyOnClose
       >
         {pdfIframeSrc && (

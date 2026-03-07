@@ -18,7 +18,10 @@
  */
 
 import { config } from '../config'
-import FormData from 'form-data'
+import { Agent } from 'undici'
+
+// 直连 agent，确保 fetch 请求 RAGFlow 时不走系统代理
+const directAgent = new Agent()
 
 /* ========== 类型定义 ========== */
 
@@ -66,6 +69,8 @@ export interface RagflowChunk {
   term_similarity: number
   positions: number[][]
   image_id?: string
+  img_id?: string
+  highlight?: string
 }
 
 /** Chat completion 返回的原文引用 */
@@ -120,7 +125,8 @@ async function ragflowFetch<T = unknown>(
   const res = await fetch(url, {
     ...options,
     headers: { ...headers(), ...(options.headers as Record<string, string> || {}) },
-  })
+    dispatcher: directAgent,
+  } as any)
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
@@ -198,21 +204,19 @@ export async function uploadDocument(
   fileBuffer: Buffer,
   fileName: string
 ): Promise<RagflowDocument[]> {
+  const blob = new Blob([fileBuffer], { type: 'application/pdf' })
   const form = new FormData()
-  form.append('file', fileBuffer, {
-    filename: fileName,
-    contentType: 'application/pdf',
-  })
+  form.append('file', blob, fileName)
 
   const url = `${getBaseUrl()}/api/v1/datasets/${datasetId}/documents`
   const res = await fetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${getApiKey()}`,
-      ...form.getHeaders(),
     },
-    body: form as unknown as BodyInit,
-  })
+    body: form,
+    dispatcher: directAgent,
+  } as any)
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
@@ -238,7 +242,7 @@ export async function listDocuments(
   const qs = params.toString()
 
   const url = `${getBaseUrl()}/api/v1/datasets/${datasetId}/documents${qs ? `?${qs}` : ''}`
-  const res = await fetch(url, { headers: headers() })
+  const res = await fetch(url, { headers: headers(), dispatcher: directAgent } as any)
   if (!res.ok) throw new Error(`RAGFlow listDocs ${res.status}`)
   const data = await res.json() as {
     code: number; data?: { total: number; docs: RagflowDocument[] }; message?: string
@@ -258,18 +262,22 @@ export async function deleteDocuments(datasetId: string, documentIds: string[]):
 /**
  * 触发文档解析（异步）
  * RAGFlow 会在后台执行 PDF 解析、分块、Embedding
+ * v0.18.0 路径: POST /datasets/{dataset_id}/chunks
  */
 export async function triggerParsing(datasetId: string, documentIds: string[]): Promise<void> {
-  await ragflowFetch(`/datasets/${datasetId}/documents/parse`, {
+  await ragflowFetch(`/datasets/${datasetId}/chunks`, {
     method: 'POST',
     body: JSON.stringify({ document_ids: documentIds }),
   })
 }
 
-/** 取消文档解析 */
+/**
+ * 取消文档解析
+ * v0.18.0 路径: DELETE /datasets/{dataset_id}/chunks
+ */
 export async function cancelParsing(datasetId: string, documentIds: string[]): Promise<void> {
-  await ragflowFetch(`/datasets/${datasetId}/documents/parse/cancel`, {
-    method: 'POST',
+  await ragflowFetch(`/datasets/${datasetId}/chunks`, {
+    method: 'DELETE',
     body: JSON.stringify({ document_ids: documentIds }),
   })
 }
@@ -317,6 +325,7 @@ export async function retrieve(
     similarity_threshold: opts?.similarity_threshold ?? 0.2,
     vector_similarity_weight: opts?.vector_similarity_weight ?? 0.3,
     keyword: opts?.keyword ?? true,
+    highlight: true,
   }
   if (opts?.document_ids) body.document_ids = opts.document_ids
 
@@ -325,7 +334,8 @@ export async function retrieve(
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
-  })
+    dispatcher: directAgent,
+  } as any)
   if (!res.ok) throw new Error(`RAGFlow retrieval ${res.status}`)
   const data = await res.json() as {
     code: number
@@ -333,7 +343,14 @@ export async function retrieve(
     message?: string
   }
   if (data.code !== 0) throw new Error(`RAGFlow retrieval: ${data.message}`)
-  return data.data || { chunks: [], total: 0 }
+  const result = data.data || { chunks: [], total: 0 }
+  result.chunks = result.chunks.map((c: any) => ({
+    ...c,
+    document_name: c.document_name || c.document_keyword || '',
+    img_id: c.img_id || c.image_id || '',
+    highlight: c.highlight || '',
+  }))
+  return result
 }
 
 /* ========== Chat（对话 — 带原文引用） ========== */
@@ -403,7 +420,8 @@ export async function chatCompletion(
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
-  })
+    dispatcher: directAgent,
+  } as any)
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
@@ -443,10 +461,11 @@ export async function downloadDocument(
   datasetId: string,
   documentId: string
 ): Promise<{ buffer: Buffer; contentType: string; fileName: string }> {
-  const url = `${getBaseUrl()}/api/v1/datasets/${datasetId}/documents/${documentId}/download`
+  const url = `${getBaseUrl()}/api/v1/datasets/${datasetId}/documents/${documentId}`
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${getApiKey()}` },
-  })
+    dispatcher: directAgent,
+  } as any)
 
   if (!res.ok) {
     throw new Error(`RAGFlow download ${res.status}: ${await res.text().catch(() => '')}`)
@@ -480,11 +499,32 @@ export async function listChunks(
   const qs = params.toString()
 
   const url = `${getBaseUrl()}/api/v1/datasets/${datasetId}/documents/${documentId}/chunks${qs ? `?${qs}` : ''}`
-  const res = await fetch(url, { headers: headers() })
+  const res = await fetch(url, { headers: headers(), dispatcher: directAgent } as any)
   if (!res.ok) throw new Error(`RAGFlow listChunks ${res.status}`)
   const data = await res.json() as { code: number; data?: { total: number; chunks: RagflowChunk[] } }
   if (data.code !== 0) throw new Error('RAGFlow listChunks error')
   return data.data || { total: 0, chunks: [] }
+}
+
+/* ========== Chunk Image（分块图片） ========== */
+
+/**
+ * 获取分块关联的图片（图表/表格截图）
+ * RAGFlow 将解析出的图表和表格保存为 JPEG 图片存储在 MinIO 中
+ * imageId 格式: {kb_id}-{chunk_id}
+ */
+export async function getChunkImage(imageId: string): Promise<Buffer> {
+  const url = `${getBaseUrl()}/v1/document/image/${imageId}`
+  const res = await fetch(url, {
+    dispatcher: directAgent,
+  } as any)
+
+  if (!res.ok) {
+    throw new Error(`RAGFlow chunk image ${res.status}`)
+  }
+
+  const arrayBuffer = await res.arrayBuffer()
+  return Buffer.from(arrayBuffer)
 }
 
 /* ========== 健康检查 ========== */
@@ -496,7 +536,8 @@ export async function healthCheck(): Promise<boolean> {
     const res = await fetch(url, {
       headers: headers(),
       signal: AbortSignal.timeout(5000),
-    })
+      dispatcher: directAgent,
+    } as any)
     return res.ok
   } catch {
     return false

@@ -192,7 +192,8 @@ knowledgeRouter.get(
     try {
       const { datasetId, documentId } = req.params
       const { buffer, contentType, fileName } = await ragflow.downloadDocument(datasetId, documentId)
-      res.setHeader('Content-Type', contentType)
+      const isPdf = fileName.toLowerCase().endsWith('.pdf') || contentType.includes('pdf')
+      res.setHeader('Content-Type', isPdf ? 'application/pdf' : contentType)
       res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`)
       res.setHeader('Content-Length', buffer.length)
       res.send(buffer)
@@ -201,6 +202,21 @@ knowledgeRouter.get(
     }
   }
 )
+
+/* ========== Chunk Image（分块图片代理） ========== */
+
+/** 代理 RAGFlow 分块图片（图表/表格截图），imageId 格式: {kb_id}-{chunk_id} */
+knowledgeRouter.get('/knowledge/chunk-image/:imageId', async (req: Request, res: Response) => {
+  try {
+    const { imageId } = req.params
+    const buffer = await ragflow.getChunkImage(imageId)
+    res.setHeader('Content-Type', 'image/jpeg')
+    res.setHeader('Cache-Control', 'public, max-age=86400')
+    res.send(buffer)
+  } catch (e) {
+    res.status(500).json({ success: false, error: e instanceof Error ? e.message : '获取图片失败' })
+  }
+})
 
 /* ========== Chunk（分块）管理 ========== */
 
