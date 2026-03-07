@@ -1,33 +1,30 @@
 /**
  * 解析路由 - POST /api/parse
  *
- * 双通道解析管线：
- *   通道 A（快速）: pdf-parse 提取纯文本 → 立即返回 reportId
- *   通道 B（异步）: PDF 转图片 → Qwen-VL 视觉识别 → 结构化内容
+ * v3 架构：PDF 上传统一走 RAGFlow
  *
  * 流程：
  *   1. 用户上传 PDF 或粘贴文本
- *   2. 立即用 pdf-parse 提取纯文本，创建报告记录（status=parsing）
- *   3. 返回 reportId 给前端（不阻塞）
- *   4. 后台异步执行：
- *      a. PDF 转图片（pdfImageService）
- *      b. 逐页视觉识别（visionService）
- *      c. 合并结果存入 structured_content
- *      d. 触发 RAG 索引（使用增强文本）
- *      e. 更新 status 为 analyzed
+ *   2. pdf-parse 提取纯文本（用于本地预览/搜索）
+ *   3. 同时将 PDF 上传到 RAGFlow 知识库，触发异步解析
+ *   4. RAGFlow 使用 DeepDOC 解析 PDF（表格/图表/文字全自动）
+ *   5. 立即返回 reportId 给前端
+ *   6. 前端可轮询 /api/reports/:id/status 查看 RAGFlow 解析进度
  *
  * 降级策略：
- *   - VL_ENABLED=false 时跳过视觉识别，只用纯文本
- *   - 视觉识别失败时降级为纯文本模式
+ *   - RAGFlow 不可用时，降级为本地纯文本存储
  *   - 任何异常都不影响主流程返回
  */
 import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import { config } from '../config'
 import { parsePdf } from '../services/pdfService'
-import { createReport, updateStructuredContent, updateReportStatus } from '../services/reportStore'
-import { pdfToImages } from '../services/pdfImageService'
-import { extractAllPages, mergeVisionToText } from '../services/visionService'
+import {
+  createReport,
+  updateReportStatus,
+  updateRagflowIds,
+} from '../services/reportStore'
+import * as ragflow from '../services/ragflowService'
 
 export const parseRouter = Router()
 
@@ -58,6 +55,7 @@ parseRouter.post(
       let source: 'pdf' | 'text' = 'text'
       let pages = 0
       let pdfBuffer: Buffer | null = null
+      let fileName = 'upload.pdf'
 
       if (req.file) {
         const result = await parsePdf(req.file.buffer)
@@ -65,6 +63,7 @@ parseRouter.post(
         source = 'pdf'
         pages = result.pages
         pdfBuffer = req.file.buffer
+        fileName = req.file.originalname || 'upload.pdf'
       } else {
         const { text } = req.body || {}
         if (typeof text !== 'string' || !text.trim()) {
@@ -77,7 +76,6 @@ parseRouter.post(
         return res.status(400).json({ success: false, error: '解析结果为空' })
       }
 
-      // 创建报告记录（status=parsing 表示正在处理中）
       const report = createReport({
         title: rawText.slice(0, 50).replace(/\n/g, ' '),
         source,
@@ -86,7 +84,6 @@ parseRouter.post(
         status: 'parsing',
       })
 
-      // 立即返回 reportId，后续处理异步进行
       res.json({
         success: true,
         reportId: report.id,
@@ -96,9 +93,9 @@ parseRouter.post(
         status: 'parsing',
       })
 
-      // ===== 异步后台处理 =====
-      processReportAsync(report.id, rawText, pdfBuffer).catch((e) => {
-        console.error(`[Parse] 异步处理失败 (report ${report.id.slice(0, 8)}):`, e)
+      // 异步上传到 RAGFlow
+      uploadToRagflow(report.id, pdfBuffer, fileName).catch((e) => {
+        console.error(`[Parse] RAGFlow 上传失败 (report ${report.id.slice(0, 8)}):`, e)
         updateReportStatus(report.id, 'error')
       })
     } catch (e) {
@@ -109,56 +106,108 @@ parseRouter.post(
 )
 
 /**
- * 异步后台处理：视觉识别 + RAG 索引
- * 不阻塞 HTTP 响应，失败时降级
+ * 异步上传 PDF 到 RAGFlow 并触发解析
+ *
+ * 步骤：
+ *   1. 确定目标 dataset（使用默认或自动创建）
+ *   2. 上传 PDF 到 RAGFlow
+ *   3. 触发异步解析
+ *   4. 记录 ragflow_document_id 和 ragflow_dataset_id
+ *   5. 启动轮询检查解析状态
  */
-async function processReportAsync(
+async function uploadToRagflow(
   reportId: string,
-  rawText: string,
-  pdfBuffer: Buffer | null
+  pdfBuffer: Buffer | null,
+  fileName: string
 ): Promise<void> {
-  let enhancedText = rawText
-  let structuredResult: Record<string, unknown> | null = null
+  if (!pdfBuffer) {
+    updateReportStatus(reportId, 'pending')
+    console.log(`[Parse] 纯文本模式，跳过 RAGFlow (report ${reportId.slice(0, 8)})`)
+    return
+  }
 
-  // 通道 B：视觉识别（仅 PDF 且 VL 开启时）
-  if (pdfBuffer && config.vlEnabled) {
+  if (!config.ragflowApiKey) {
+    console.warn('[Parse] RAGFLOW_API_KEY 未配置，跳过 RAGFlow')
+    updateReportStatus(reportId, 'pending')
+    return
+  }
+
+  // 1. 确定 dataset
+  let datasetId = config.ragflowDefaultDatasetId
+  if (!datasetId) {
+    console.log('[Parse] 未配置默认 dataset，尝试创建...')
+    const ds = await ragflow.createDataset('stock-reports', {
+      description: '股票研报知识库',
+      chunk_method: 'naive',
+      parser_config: { chunk_token_num: 512, layout_recognize: true },
+    })
+    datasetId = ds.id
+    console.log(`[Parse] 创建 dataset: ${datasetId}`)
+  }
+
+  // 2. 上传文档
+  console.log(`[Parse] 上传 PDF 到 RAGFlow: ${fileName} (${(pdfBuffer.length / 1024).toFixed(0)}KB)`)
+  const docs = await ragflow.uploadDocument(datasetId, pdfBuffer, fileName)
+  if (!docs.length) {
+    throw new Error('RAGFlow 上传返回空文档列表')
+  }
+  const docId = docs[0].id
+  console.log(`[Parse] RAGFlow 文档 ID: ${docId}`)
+
+  // 3. 关联到本地记录
+  updateRagflowIds(reportId, docId, datasetId)
+
+  // 4. 触发解析
+  await ragflow.triggerParsing(datasetId, [docId])
+  console.log(`[Parse] 已触发 RAGFlow 解析 (doc ${docId.slice(0, 8)})`)
+
+  // 5. 轮询解析进度
+  await pollParsingStatus(reportId, datasetId, docId)
+}
+
+/**
+ * 轮询 RAGFlow 文档解析状态
+ * 每 5 秒检查一次，最多等 10 分钟
+ */
+async function pollParsingStatus(
+  reportId: string,
+  datasetId: string,
+  documentId: string
+): Promise<void> {
+  const MAX_POLLS = 120
+  const INTERVAL = 5000
+
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await new Promise((r) => setTimeout(r, INTERVAL))
+
     try {
-      console.log(`[Parse] 开始视觉识别 (report ${reportId.slice(0, 8)})...`)
+      const doc = await ragflow.getDocumentStatus(datasetId, documentId)
+      if (!doc) continue
 
-      // PDF 转图片
-      const images = await pdfToImages(pdfBuffer, config.vlMaxPages)
-      if (images.length > 0) {
-        // Qwen-VL 逐页识别
-        const visionResult = await extractAllPages(images)
+      const progress = doc.progress ?? 0
+      console.log(`[Parse] RAGFlow 解析进度: ${(progress * 100).toFixed(0)}% (${doc.run})`)
 
-        // 存储结构化内容
-        structuredResult = visionResult as unknown as Record<string, unknown>
-        updateStructuredContent(reportId, structuredResult)
-
-        // 合并为增强文本（用于 RAG 索引）
-        const visionText = mergeVisionToText(visionResult)
-        if (visionText.trim().length > rawText.length * 0.5) {
-          enhancedText = visionText
-          console.log(`[Parse] 使用视觉增强文本 (${enhancedText.length} chars vs 原文 ${rawText.length} chars)`)
+      if (doc.run === '2' || progress >= 1) {
+        if (doc.progress_msg && doc.progress_msg.toLowerCase().includes('error')) {
+          console.error(`[Parse] RAGFlow 解析出错: ${doc.progress_msg}`)
+          updateReportStatus(reportId, 'error')
         } else {
-          console.log('[Parse] 视觉文本过短，保留 pdf-parse 原文')
+          updateReportStatus(reportId, 'analyzed')
+          console.log(`[Parse] RAGFlow 解析完成 (report ${reportId.slice(0, 8)}, chunks: ${doc.chunk_count})`)
         }
+        return
+      }
+
+      if (doc.run === '3') {
+        console.warn('[Parse] RAGFlow 解析被取消')
+        updateReportStatus(reportId, 'error')
+        return
       }
     } catch (e) {
-      console.warn('[Parse] 视觉识别失败，降级为纯文本:', e instanceof Error ? e.message : e)
+      console.warn(`[Parse] 轮询状态出错 (${i + 1}/${MAX_POLLS}):`, e)
     }
   }
 
-  // 建立 RAG 索引
-  try {
-    const { indexReport } = await import('../services/rag')
-    const cnt = await indexReport(reportId, enhancedText, structuredResult)
-    console.log(`[Parse] RAG 索引完成: ${cnt} 个块`)
-  } catch (e) {
-    console.warn('[Parse] RAG 索引失败（不影响主流程）:', e)
-  }
-
-  // 更新状态为已完成
-  updateReportStatus(reportId, 'pending')
-  console.log(`[Parse] 异步处理完成 (report ${reportId.slice(0, 8)})`)
+  console.warn('[Parse] 轮询超时（10 分钟）')
+  updateReportStatus(reportId, 'error')
 }

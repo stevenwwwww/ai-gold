@@ -8,6 +8,8 @@ import ReportDetailPage from '@/pages/reports/detail'
 import SearchPage from '@/pages/search'
 import UsersPage from '@/pages/users'
 import PasswordPage from '@/pages/password'
+import KnowledgePage from '@/pages/knowledge'
+import KnowledgeSearchPage from '@/pages/knowledge/search'
 
 export default function App() {
   return (
@@ -24,6 +26,8 @@ export default function App() {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/:id" element={<ReportDetailPage />} />
         <Route path="search" element={<SearchPage />} />
+        <Route path="knowledge" element={<KnowledgePage />} />
+        <Route path="knowledge/search" element={<KnowledgeSearchPage />} />
         <Route path="password" element={<PasswordPage />} />
         <Route path="users" element={
           <RequireAdmin><UsersPage /></RequireAdmin>

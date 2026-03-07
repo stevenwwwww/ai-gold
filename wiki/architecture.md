@@ -1,4 +1,4 @@
-# AI 研报分析系统 — 完整架构文档 (v2)
+# AI 研报分析系统 — 完整架构文档 (v3 - RAGFlow 集成版)
 
 > 这份文档面向**新接手的开发人员**，目标是让你在 30 分钟内理解整个系统、跑通开发环境、知道怎么改代码。
 
@@ -6,51 +6,60 @@
 
 ## 1. 项目全貌（一句话理解）
 
-这是一个「上传研报 PDF → AI 自动生成 6 维度分析报告 → 可以向 AI 提问研报细节 → 支持图表/表格编辑」的系统。
+这是一个「上传研报 PDF → RAGFlow 自动解析建索引 → AI 自动生成 6 维度分析报告 → 可以向 AI 提问研报细节（带原文引用）→ 支持图表/表格编辑」的系统。
 
-它由 **三个独立模块** 组成，共享同一个后端：
+它由 **四个独立模块** 组成：
 
 | 模块 | 目录 | 技术栈 | 用途 |
 |------|------|--------|------|
 | 小程序 | `src/` | Taro + React | C 端用户，只读浏览研报、对话 |
-| Web 管理端 | `web/` | React + Vite + Ant Design + ECharts + Monaco | 内部管理，深度分析、搜索、图表编辑、用户管理 |
-| 后端服务 | `server/` | Express + TypeScript + SQLite | API、RAG、LLM、视觉识别、数据存储 |
+| Web 管理端 | `web/` | React + Vite + Ant Design + ECharts + Monaco | 内部管理，深度分析、搜索、知识库管理、图表编辑、用户管理 |
+| 后端服务 | `server/` | Express + TypeScript + SQLite | API、LLM 代理、数据存储、RAGFlow 透传 |
+| RAGFlow | `docker/` | Docker（独立微服务） | PDF 解析、知识库建立、向量检索、对话引用 |
+
+### v3 核心变更：RAGFlow 替代本地 RAG 管线
+
+```
+v2 管线（已废弃）:
+  PDF → pdf-to-img → Qwen-VL → chunker → embedder → vectorStore(SQLite)
+
+v3 管线（当前）:
+  PDF → RAGFlow API（DeepDOC 解析 + 自动分块 + Embedding + Elasticsearch）
+  对话 → RAGFlow Retrieval（混合检索 + Rerank）→ LLM → 带原文引用的回答
+```
 
 ```
 miniApp/
 ├── src/              ← 小程序前端（Taro）
-│   └── pages/report/browse/   ← v2 新增：只读研报浏览
+│   └── pages/report/browse/   ← 只读研报浏览
 ├── web/              ← Web 管理端（React + Vite）
 │   └── src/
+│       ├── api/
+│       │   └── knowledge.ts     ← v3 新增：知识库 API
 │       ├── components/
-│       │   ├── ChartRenderer.tsx  ← v2 新增：ECharts 图表渲染+编辑
-│       │   ├── JsonEditor.tsx     ← v2 新增：Monaco JSON 编辑器
-│       │   └── EditableTable.tsx  ← v2 新增：行内编辑表格
+│       │   ├── ChartRenderer.tsx
+│       │   ├── JsonEditor.tsx
+│       │   └── EditableTable.tsx
 │       └── pages/
+│           └── knowledge/       ← v3 新增：知识库管理页面
 ├── server/           ← 后端服务（Express + SQLite）
 │   ├── src/
 │   │   ├── config/
-│   │   │   ├── index.ts   ← v2: 新增 VL_MODEL/VL_ENABLED/VL_MAX_PAGES
-│   │   │   └── models.ts  ← v2: 新增 qwen-vl-max/qwen-vl-plus
-│   │   ├── db/            ← v2: schema 新增 structured_content/status/chunk_type
-│   │   ├── middleware/
+│   │   │   └── index.ts   ← v3: 新增 RAGFLOW_* 配置
+│   │   ├── db/            ← v3: schema 新增 ragflow_document_id/ragflow_dataset_id
 │   │   ├── routes/
-│   │   │   ├── parse.ts   ← v2: ★ 双通道解析管线
-│   │   │   ├── reports.ts ← v2: 完善 CRUD + 搜索 + 统计 + 批量删除
-│   │   │   ├── chat.ts    ← v2: 多研报联合对话 + 结构化合成
-│   │   │   └── summary.ts ← v2: 注入结构化内容
+│   │   │   ├── parse.ts   ← v3: ★ PDF 上传走 RAGFlow API
+│   │   │   ├── chat.ts    ← v3: ★ 对话走 RAGFlow（三级降级）
+│   │   │   ├── knowledge.ts ← v3 新增：知识库管理路由
+│   │   │   └── reports.ts
 │   │   └── services/
-│   │       ├── rag/
-│   │       │   ├── chunker.ts     ← v2: ★ 类型感知分块 (text/table/chart)
-│   │       │   ├── vectorStore.ts ← v2: 多研报联合检索
-│   │       │   └── index.ts       ← v2: retrieveMultiContext()
-│   │       ├── pdfImageService.ts ← v2 新增：PDF 转图片
-│   │       ├── visionService.ts   ← v2 新增：Qwen-VL 多模态识别
-│   │       ├── synthesizer.ts     ← v2 新增：结构化合成器
-│   │       ├── deepAnalysisService.ts ← v2: 图表数据输出
-│   │       └── reportStore.ts     ← v2: 新增字段 + 搜索 + 统计
-│   ├── scripts/
+│   │       ├── ragflowService.ts ← v3 新增：★ RAGFlow API 封装层
+│   │       ├── rag/              ← v2 遗留，保留兼容
+│   │       └── reportStore.ts    ← v3: 新增 ragflow 关联字段
 │   └── data/
+├── docker/           ← v3 新增：RAGFlow Docker 部署
+│   ├── .env
+│   └── README.md
 ├── wiki/
 └── package.json
 ```
@@ -63,30 +72,41 @@ miniApp/
 
 - Node.js >= 18
 - yarn
+- Docker Desktop >= 24.0（用于 RAGFlow）
 
 ### 步骤
 
 ```bash
-# 1. 安装所有依赖
+# 1. 启动 RAGFlow（独立 RAG 引擎）
+git clone https://github.com/infiniflow/ragflow.git ragflow-repo
+cd ragflow-repo/docker && git checkout -f v0.18.0
+docker compose -f docker-compose.yml up -d
+# 等待 docker logs -f ragflow-server 出现 "RAGFlow is running"
+# 访问 http://localhost:80 注册管理员 → 配置 Qwen API Key → 复制 API Key
+
+# 2. 安装所有依赖
 cd miniApp
 yarn install              # 小程序依赖
 cd server && yarn install # 后端依赖
 cd ../web && yarn install # Web 前端依赖
 cd ..
 
-# 2. 配置环境变量
+# 3. 配置环境变量
 cp server/.env.example server/.env
 # 编辑 server/.env，必须填写：
 #   QWEN_API_KEY=你的通义千问 API Key（去 DashScope 申请）
 #   JWT_SECRET=改成一个随机字符串
+#   RAGFLOW_API_KEY=从 RAGFlow 管理页面复制的 API Key
+#   RAGFLOW_BASE_URL=http://localhost:9380
+#   RAGFLOW_UI_URL=http://localhost:80
 
-# 3. 启动后端（端口 3000）
+# 4. 启动后端（端口 3000）
 cd server && yarn dev
 
-# 4. 启动 Web 开发服务（端口 5173，自动代理到后端）
+# 5. 启动 Web 开发服务（端口 5173，自动代理到后端）
 cd ../web && yarn dev
 
-# 5. 启动小程序开发
+# 6. 启动小程序开发
 cd .. && yarn dev:weapp
 # 然后用微信开发者工具打开 dist/ 目录
 ```
@@ -99,9 +119,95 @@ cd .. && yarn dev:weapp
 
 ---
 
-## 3. ★ v2 核心改造：双通道 PDF 解析管线
+## 3. ★ v3 核心改造：RAGFlow 集成
 
-### 3.1 为什么需要双通道？
+### 3.0 架构演进总结
+
+| 版本 | PDF 解析 | 知识库 | 检索 | 对话 |
+|------|---------|--------|------|------|
+| v1 | pdf-parse 纯文本 | 无 | 全文截断 | LLM 直接对话 |
+| v2 | pdf-parse + Qwen-VL 双通道 | 本地 SQLite 向量库 | 余弦相似度 | RAG + LLM |
+| **v3** | **RAGFlow DeepDOC** | **RAGFlow（ES + 向量）** | **混合检索 + Rerank** | **RAGFlow Chat（带原文引用）** |
+
+### 3.1 为什么需要 RAGFlow？
+
+v2 的本地 RAG 管线存在以下问题：
+- **PDF 解析精度不足**：Qwen-VL 逐页识别成本高、速度慢，且表格/图表识别依赖 prompt
+- **向量检索质量差**：SQLite 内存向量 + 余弦相似度无法支持大规模检索
+- **无原文定位**：无法将回答精确指向 PDF 原文位置
+- **缺少 Rerank**：纯向量匹配容易漏掉关键词相关的内容
+- **多研报检索弱**：简单的多 ID 查询无法做跨文档语义融合
+
+RAGFlow 作为专业 RAG 引擎，提供：
+- **DeepDOC**：自动识别 PDF 表格/图表/分栏/页眉页脚
+- **混合检索**：向量 + BM25 关键词 + Rerank 三层融合
+- **Elasticsearch**：生产级向量存储，支持大规模数据
+- **原文引用**：每个回答自带 reference（原文片段 + PDF 页码定位）
+- **知识库管理 UI**：内置 Web 管理界面，可 iframe 嵌入
+
+### 3.2 v3 架构流程图
+
+```
+用户上传 PDF
+     │
+     ├─── pdf-parse 提取纯文本（本地预览/搜索用）
+     │
+     └─── RAGFlow API
+          │
+          ├── 上传文档（uploadDocument）
+          ├── 触发解析（triggerParsing）→ DeepDOC 自动分析
+          ├── 后台轮询（pollParsingStatus）→ 等待完成
+          │
+          └── 解析完成后：
+              ├── 知识库中已建好分块 + 向量索引
+              ├── 报告 status = analyzed
+              └── 可供检索和对话使用
+```
+
+### 3.3 对话三级降级
+
+```
+用户提问
+   │
+   ├── 模式 1: RAGFlow Chat Completion（最佳）
+   │   └── RAGFlow 内部完成 检索 + LLM + 引用
+   │
+   ├── 模式 2: RAGFlow Retrieval + 本地 LLM（备选）
+   │   └── 用 RAGFlow 检索片段，本地 LLM 生成回答
+   │
+   └── 模式 3: 纯文本截断 + 本地 LLM（兜底）
+       └── RAGFlow 完全不可用时，使用原文前 N 字符
+```
+
+### 3.4 核心文件说明
+
+| 文件 | 作用 |
+|------|------|
+| `server/src/services/ragflowService.ts` | ★ RAGFlow API 封装层，所有与 RAGFlow 的交互都在这里 |
+| `server/src/routes/parse.ts` | PDF 上传 → RAGFlow 上传 + 触发解析 + 轮询状态 |
+| `server/src/routes/chat.ts` | 对话路由，三级降级：RAGFlow Chat → Retrieval+LLM → 纯文本 |
+| `server/src/routes/knowledge.ts` | 知识库管理路由，透传 RAGFlow CRUD + 检索 API |
+| `web/src/pages/knowledge/index.tsx` | 知识库管理页面：Dataset/Document/Chunk CRUD + 检索测试 + RAGFlow UI iframe |
+| `web/src/api/knowledge.ts` | Web 端知识库 API 调用层 |
+| `docker/README.md` | RAGFlow Docker 部署指南 |
+
+### 3.5 环境变量
+
+```env
+RAGFLOW_BASE_URL=http://localhost:9380    # RAGFlow API 地址
+RAGFLOW_API_KEY=ragflow-xxxxxx            # RAGFlow API Key（从管理页面获取）
+RAGFLOW_DEFAULT_DATASET_ID=               # 默认知识库 ID（可选，不填会自动创建）
+RAGFLOW_CHAT_ID=                          # RAGFlow Chat Assistant ID（可选，用于模式1）
+RAGFLOW_UI_URL=http://localhost:80        # RAGFlow Web UI 地址（iframe 嵌入用）
+```
+
+---
+
+## 3.A（归档）v2 双通道 PDF 解析管线
+
+> 以下内容为 v2 架构说明，v3 已用 RAGFlow 替代。本地 RAG 代码保留在 `services/rag/` 目录，作为降级兜底。
+
+### 为什么需要双通道？
 
 v1 只用 `pdf-parse` 提取纯文本，**表格变成乱序文字，图表完全丢失**。
 v2 引入 **Qwen-VL 多模态视觉模型**，逐页识别 PDF 页面图片，精准提取表格结构和图表数据。

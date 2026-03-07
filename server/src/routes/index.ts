@@ -9,6 +9,7 @@ import { summaryRouter } from './summary'
 import { reportsRouter } from './reports'
 import { authRouter } from './auth'
 import { usersRouter } from './users'
+import { knowledgeRouter } from './knowledge'
 
 export const routes = Router()
 
@@ -19,3 +20,4 @@ routes.use('/api', parseRouter)
 routes.use('/api', chatRouter)
 routes.use('/api', summaryRouter)
 routes.use('/api', reportsRouter)
+routes.use('/api', knowledgeRouter)

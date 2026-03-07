@@ -84,16 +84,25 @@ function migrateAddColumns(d: Database.Database) {
     d.exec("ALTER TABLE reports ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'")
   }
 
-  // report_chunks 表迁移
-  const chunkCols = d.prepare("PRAGMA table_info(report_chunks)").all() as { name: string }[]
-  const chunkColNames = chunkCols.map(c => c.name)
+  // RAGFlow 关联字段
+  if (!reportColNames.includes('ragflow_document_id')) {
+    d.exec('ALTER TABLE reports ADD COLUMN ragflow_document_id TEXT')
+  }
+  if (!reportColNames.includes('ragflow_dataset_id')) {
+    d.exec('ALTER TABLE reports ADD COLUMN ragflow_dataset_id TEXT')
+  }
 
-  if (!chunkColNames.includes('chunk_type')) {
-    d.exec("ALTER TABLE report_chunks ADD COLUMN chunk_type TEXT NOT NULL DEFAULT 'text'")
-  }
-  if (!chunkColNames.includes('metadata')) {
-    d.exec('ALTER TABLE report_chunks ADD COLUMN metadata TEXT')
-  }
+  // report_chunks 表迁移（本地 RAG 遗留，保留兼容）
+  try {
+    const chunkCols = d.prepare("PRAGMA table_info(report_chunks)").all() as { name: string }[]
+    const chunkColNames = chunkCols.map(c => c.name)
+    if (!chunkColNames.includes('chunk_type')) {
+      d.exec("ALTER TABLE report_chunks ADD COLUMN chunk_type TEXT NOT NULL DEFAULT 'text'")
+    }
+    if (!chunkColNames.includes('metadata')) {
+      d.exec('ALTER TABLE report_chunks ADD COLUMN metadata TEXT')
+    }
+  } catch { /* report_chunks 表可能不存在，忽略 */ }
 
   // report_groups 表（按股票/行业分组，支撑多研报对比）
   d.exec(`

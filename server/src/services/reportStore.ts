@@ -17,6 +17,8 @@ export interface Report {
   summary: Record<string, unknown> | null
   structuredContent: Record<string, unknown> | null
   status: ReportStatus
+  ragflowDocumentId: string | null
+  ragflowDatasetId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -29,6 +31,8 @@ export interface CreateReportInput {
   summary?: Record<string, unknown>
   structuredContent?: Record<string, unknown>
   status?: ReportStatus
+  ragflowDocumentId?: string
+  ragflowDatasetId?: string
 }
 
 export interface ChatRecord {
@@ -46,14 +50,16 @@ export function createReport(input: CreateReportInput): Report {
   const now = Date.now()
   const status = input.status ?? 'pending'
   db.prepare(`
-    INSERT INTO reports (id, title, source, raw_text, pages, summary_json, structured_content, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO reports (id, title, source, raw_text, pages, summary_json, structured_content, status, ragflow_document_id, ragflow_dataset_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, input.title, input.source, input.rawText,
     input.pages ?? 0,
     input.summary ? JSON.stringify(input.summary) : null,
     input.structuredContent ? JSON.stringify(input.structuredContent) : null,
     status,
+    input.ragflowDocumentId ?? null,
+    input.ragflowDatasetId ?? null,
     now, now
   )
   return {
@@ -62,8 +68,21 @@ export function createReport(input: CreateReportInput): Report {
     summary: input.summary ?? null,
     structuredContent: input.structuredContent ?? null,
     status,
+    ragflowDocumentId: input.ragflowDocumentId ?? null,
+    ragflowDatasetId: input.ragflowDatasetId ?? null,
     createdAt: now, updatedAt: now
   }
+}
+
+/** 更新 RAGFlow 关联 ID */
+export function updateRagflowIds(
+  id: string,
+  ragflowDocumentId: string,
+  ragflowDatasetId: string
+): void {
+  const db = getDb()
+  db.prepare('UPDATE reports SET ragflow_document_id = ?, ragflow_dataset_id = ?, updated_at = ? WHERE id = ?')
+    .run(ragflowDocumentId, ragflowDatasetId, Date.now(), id)
 }
 
 export function getReport(id: string): Report | null {
@@ -215,6 +234,8 @@ function rowToReport(row: Record<string, unknown>): Report {
     summary,
     structuredContent,
     status: (String(row.status || 'pending')) as ReportStatus,
+    ragflowDocumentId: row.ragflow_document_id ? String(row.ragflow_document_id) : null,
+    ragflowDatasetId: row.ragflow_dataset_id ? String(row.ragflow_dataset_id) : null,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   }

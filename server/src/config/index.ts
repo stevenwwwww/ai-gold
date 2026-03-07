@@ -48,10 +48,12 @@ export const config = {
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
 
-  // 视觉模型（Qwen-VL）— PDF 图表/表格识别
-  vlModel: process.env.VL_MODEL || 'qwen-vl-max',
-  vlEnabled: (process.env.VL_ENABLED || 'true') === 'true',
-  vlMaxPages: intEnv('VL_MAX_PAGES', 30),
+  // RAGFlow（替代本地 RAG 管线）
+  ragflowBaseUrl: process.env.RAGFLOW_BASE_URL || 'http://localhost:9380',
+  ragflowApiKey: process.env.RAGFLOW_API_KEY || '',
+  ragflowDefaultDatasetId: process.env.RAGFLOW_DEFAULT_DATASET_ID || '',
+  ragflowChatId: process.env.RAGFLOW_CHAT_ID || '',
+  ragflowUiUrl: process.env.RAGFLOW_UI_URL || 'http://localhost:80',
 
   // 多研报联合检索
   multiReportMax: intEnv('MULTI_REPORT_MAX', 5),

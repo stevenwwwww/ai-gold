@@ -4,7 +4,7 @@ import { Layout, Menu, Avatar, Dropdown, type MenuProps } from 'antd'
 import {
   DashboardOutlined, FileTextOutlined, SearchOutlined,
   UserOutlined, LogoutOutlined, KeyOutlined, MenuFoldOutlined,
-  MenuUnfoldOutlined, TeamOutlined,
+  MenuUnfoldOutlined, TeamOutlined, DatabaseOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/store/auth'
 
@@ -20,6 +20,13 @@ export default function MainLayout() {
     { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
     { key: '/reports', icon: <FileTextOutlined />, label: '研报管理' },
     { key: '/search', icon: <SearchOutlined />, label: '研报搜索' },
+    {
+      key: 'knowledge-group', icon: <DatabaseOutlined />, label: '知识库',
+      children: [
+        { key: '/knowledge', label: '知识库管理' },
+        { key: '/knowledge/search', label: '知识库检索' },
+      ],
+    },
     ...(isAdmin ? [{ key: '/users', icon: <TeamOutlined />, label: '用户管理' }] : []),
   ]
 
@@ -30,7 +37,9 @@ export default function MainLayout() {
     { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true },
   ]
 
-  const selectedKey = '/' + location.pathname.split('/')[1]
+  const pathname = location.pathname
+  const selectedKey = pathname.startsWith('/knowledge/') ? pathname : '/' + pathname.split('/')[1]
+  const openKeys = pathname.startsWith('/knowledge') ? ['knowledge-group'] : []
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -44,6 +53,7 @@ export default function MainLayout() {
           {collapsed ? 'AI' : 'AI 研报分析'}
         </div>
         <Menu theme="dark" mode="inline" selectedKeys={[selectedKey]}
+          defaultOpenKeys={openKeys}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />

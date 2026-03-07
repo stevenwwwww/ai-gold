@@ -168,8 +168,20 @@ export async function getReportStats(): Promise<ReportStats> {
   return data.data
 }
 
+/** 对话引用（RAGFlow 原文引用） */
+export interface ChatReference {
+  content: string
+  documentName: string
+  similarity: number
+  positions: number[][]
+}
+
 export async function chatWithReport(reportId: string, messages: { role: string; content: string }[]) {
-  const { data } = await request.post<{ content: string; sources?: unknown[] }>('/chat', { reportId, messages })
+  const { data } = await request.post<{
+    content: string
+    sources?: unknown[]
+    references?: ChatReference[]
+  }>('/chat', { reportId, messages })
   return data
 }
 

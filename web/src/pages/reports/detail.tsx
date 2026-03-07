@@ -9,21 +9,22 @@
  *   5. 编辑后自动保存到后端
  *   6. 解析状态轮询（parsing → analyzed）
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Card, Descriptions, Tag, Rate, List, Row, Col, Spin, Button, Typography, Divider,
-  Alert, Space, Table, message, Empty, Badge, Tabs,
+  Alert, Space, Table, message, Empty, Badge, Tabs, Input, Collapse, Tooltip,
 } from 'antd'
 import {
   ArrowLeftOutlined, RobotOutlined, BankOutlined, LineChartOutlined,
   DollarOutlined, BarChartOutlined, AlertOutlined, CheckCircleOutlined,
-  SaveOutlined, EditOutlined,
+  SaveOutlined, EditOutlined, SendOutlined, FileTextOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import {
   getReport, generateDeepAnalysis, updateAnalysis, getReportStatus,
-  type ReportDetail, type DeepAnalysis, type ChartData,
+  chatWithReport, getChatHistory,
+  type ReportDetail, type DeepAnalysis, type ChartData, type ChatReference,
 } from '@/api/reports'
 import ChartRenderer from '@/components/ChartRenderer'
 import EditableTable from '@/components/EditableTable'
@@ -146,6 +147,47 @@ export default function ReportDetailPage() {
     }))
   }, [updateField])
 
+  // ===== AI 对话 =====
+  const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string; references?: ChatReference[] }>>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (id) {
+      getChatHistory(id).then((history) => {
+        setChatMessages(history.map((h) => ({ role: h.role, content: h.content })))
+      }).catch(() => { /* ignore */ })
+    }
+  }, [id])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const handleSendMessage = async (directText?: string) => {
+    const userMsg = (directText || chatInput).trim()
+    if (!userMsg || !id || chatLoading) return
+    setChatInput('')
+
+    const newMessages = [...chatMessages, { role: 'user', content: userMsg }]
+    setChatMessages(newMessages)
+    setChatLoading(true)
+
+    try {
+      const result = await chatWithReport(id, newMessages.map((m) => ({ role: m.role, content: m.content })))
+      setChatMessages([
+        ...newMessages,
+        { role: 'assistant', content: result.content, references: result.references },
+      ])
+    } catch (e: any) {
+      message.error(e.message || '对话失败')
+      setChatMessages(newMessages)
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
   if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>
   if (!report) return <Empty description="研报不存在" />
 
@@ -203,6 +245,7 @@ export default function ReportDetailPage() {
       ) : (
         <Tabs defaultActiveKey="overview" items={[
           { key: 'overview', label: '6维度分析', children: renderAnalysis(analysis, handleChartChange, handleRevenueDataChange, handleProfitDataChange) },
+          { key: 'chat', label: 'AI 对话', icon: <RobotOutlined />, children: renderChatPanel(chatMessages, chatInput, chatLoading, setChatInput, handleSendMessage, chatEndRef) },
           { key: 'raw', label: '原文', children: <Card><Paragraph style={{ whiteSpace: 'pre-wrap', maxHeight: 600, overflow: 'auto' }}>{report.rawText?.slice(0, 10000) || '无原文'}</Paragraph></Card> },
         ]} />
       )}
@@ -435,5 +478,111 @@ function renderAnalysis(
           )} />
       </Card>
     </>
+  )
+}
+
+const QUICK_PROMPTS = [
+  '这份研报的核心逻辑是什么？',
+  '公司的竞争优势在哪里？',
+  '财务数据有什么异常吗？',
+  '主要的风险点有哪些？',
+  '目标价和估值方法是什么？',
+  '未来增长的催化剂有哪些？',
+]
+
+/** AI 对话面板 — 展示 RAGFlow 原文引用 */
+function renderChatPanel(
+  messages: Array<{ role: string; content: string; references?: ChatReference[] }>,
+  inputValue: string,
+  loading: boolean,
+  setInput: (v: string) => void,
+  onSend: (text?: string) => void,
+  endRef: React.RefObject<HTMLDivElement | null>,
+) {
+  return (
+    <Card bodyStyle={{ padding: 0 }}>
+      <div style={{ height: 500, overflowY: 'auto', padding: 16 }}>
+        {messages.length === 0 && (
+          <div style={{ padding: '24px 16px' }}>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16, textAlign: 'center' }}>
+              向 AI 提问关于这份研报的任何问题，或点击下方快捷提问：
+            </Text>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {QUICK_PROMPTS.map((q) => (
+                <Button key={q} size="small" style={{ borderRadius: 16 }}
+                  onClick={() => onSend(q)}>
+                  {q}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.map((msg, idx) => (
+          <div key={idx} style={{
+            display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+            marginBottom: 12,
+          }}>
+            <div style={{
+              maxWidth: '80%', padding: '10px 16px', borderRadius: 12,
+              background: msg.role === 'user' ? '#1677ff' : '#f5f5f5',
+              color: msg.role === 'user' ? '#fff' : '#333',
+            }}>
+              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{msg.content}</div>
+              {msg.references && msg.references.length > 0 && (
+                <Collapse size="small" style={{ marginTop: 8, background: 'rgba(255,255,255,0.9)' }}
+                  items={[{
+                    key: 'refs',
+                    label: <Text type="secondary" style={{ fontSize: 12 }}>
+                      <FileTextOutlined /> 原文引用 ({msg.references.length} 个片段)
+                    </Text>,
+                    children: (
+                      <div>
+                        {msg.references.map((ref, ri) => (
+                          <div key={ri} style={{
+                            padding: 8, marginBottom: 6, background: '#fafafa',
+                            borderRadius: 4, borderLeft: '3px solid #1677ff', fontSize: 12,
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <Text type="secondary">{ref.documentName}</Text>
+                              <Tag color="blue" style={{ fontSize: 11 }}>
+                                相关度 {(ref.similarity * 100).toFixed(0)}%
+                              </Tag>
+                            </div>
+                            <Text style={{ fontSize: 12 }}>{ref.content}</Text>
+                          </div>
+                        ))}
+                      </div>
+                    ),
+                  }]}
+                />
+              )}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: 'flex', marginBottom: 12 }}>
+            <div style={{ padding: '10px 16px', borderRadius: 12, background: '#f5f5f5' }}>
+              <Spin size="small" /> <Text type="secondary" style={{ marginLeft: 8 }}>思考中...</Text>
+            </div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+      <Divider style={{ margin: 0 }} />
+      <div style={{ padding: 12, display: 'flex', gap: 8 }}>
+        <Input.TextArea
+          value={inputValue}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="输入问题，如：这家公司的核心竞争力是什么？"
+          autoSize={{ minRows: 1, maxRows: 4 }}
+          onPressEnter={(e) => {
+            if (!e.shiftKey) { e.preventDefault(); onSend() }
+          }}
+        />
+        <Button type="primary" icon={<SendOutlined />} loading={loading} onClick={onSend}>
+          发送
+        </Button>
+      </div>
+    </Card>
   )
 }
