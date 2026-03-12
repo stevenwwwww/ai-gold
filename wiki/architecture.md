@@ -60,6 +60,16 @@ miniApp/
 ├── docker/           ← v3 新增：RAGFlow Docker 部署
 │   ├── .env
 │   └── README.md
+├── server/scripts/crawler/  ← v4 新增：医学文献爬虫
+│   ├── index.ts      # 主入口，yarn crawler 运行
+│   ├── sources/pubmed.ts
+│   ├── uploader.ts
+│   └── state.ts
+├── deploy/           ← v4 新增：ECS 一键部署
+│   ├── deploy.sh
+│   ├── .env.production.template
+│   ├── nginx.conf
+│   └── verify.sh
 ├── wiki/
 └── package.json
 ```
@@ -346,6 +356,18 @@ CREATE TABLE report_chunks (
 metadata 示例：
 - table: `{ "title": "营收预测", "headers": ["年份","营收"], "rowCount": 5 }`
 - chart: `{ "chartType": "bar", "title": "毛利率趋势", "dataPoints": [...] }`
+
+---
+
+### 5.0 医生助手（v4 新增）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/doctor/datasets` | 获取医生助手可用知识库 ID 列表 |
+| POST | `/api/chat` | 对话，支持 `datasetIds` 直接传入（医生模式） |
+| POST | `/api/chat/stream` | 流式对话（仅医生模式），返回 SSE |
+
+医生助手使用 `datasetIds` 指定医学文献知识库，不绑定研报。RAG 检索采用医学专用 prompt，回答格式包含「来源：论文标题 (年份) [PMC ID]」。
 
 ---
 

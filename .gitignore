@@ -4,3 +4,5 @@ dist/
 *.log
 .env
 .env.local
+aliyun.env
+deploy/.env.production

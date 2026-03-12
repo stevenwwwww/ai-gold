@@ -52,7 +52,9 @@ export const config = {
   ragflowBaseUrl: process.env.RAGFLOW_BASE_URL || 'http://localhost:9380',
   ragflowApiKey: process.env.RAGFLOW_API_KEY || '',
   ragflowDefaultDatasetId: process.env.RAGFLOW_DEFAULT_DATASET_ID || '',
+  ragflowMedicalDatasetId: process.env.RAGFLOW_MEDICAL_DATASET_ID || process.env.RAGFLOW_DEFAULT_DATASET_ID || '',
   ragflowChatId: process.env.RAGFLOW_CHAT_ID || '',
+  ragflowDoctorChatId: process.env.RAGFLOW_DOCTOR_CHAT_ID || '',
   ragflowUiUrl: process.env.RAGFLOW_UI_URL || 'http://localhost:80',
 
   // 多研报联合检索

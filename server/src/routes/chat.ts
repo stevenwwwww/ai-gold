@@ -18,7 +18,7 @@
  */
 import { Router, Request, Response } from 'express'
 import { config } from '../config'
-import { chat as llmChat, type ChatMessage } from '../services/llmService'
+import { chat as llmChat, chatStream, type ChatMessage } from '../services/llmService'
 import { getReport, addChatRecord, getChatHistory } from '../services/reportStore'
 import * as ragflow from '../services/ragflowService'
 
@@ -38,9 +38,21 @@ const RAG_SYSTEM_PROMPT = `你是一位专业证券分析师助手。以下是�
 【检索到的研报片段】
 `
 
+const RAG_DOCTOR_PROMPT = `你是一位专业医学文献助手。以下是从医学文献中检索到的与用户问题最相关的片段。
+
+【重要规则】
+1. 只能基于以下片段内容回答，严禁编造任何不在片段中的信息
+2. 如果片段中没有相关信息，明确告知用户"检索到的文献中未涉及此内容"
+3. 回答时引用来源，格式：来源：论文标题 (年份) [PMC ID] 或 [PMID]
+4. 建议要基于循证医学，明确标注文献出处
+5. 回答要专业、简洁、有条理，适合临床参考
+
+【检索到的文献片段】
+`
+
 chatRouter.post('/chat', async (req: Request, res: Response) => {
   try {
-    const { reportId, reportIds, messages, reportContext, model } = req.body || {}
+    const { reportId, reportIds, datasetIds, messages, reportContext, model } = req.body || {}
 
     if (!Array.isArray(messages) || messages.length === 0) {
       res.status(400).json({ error: 'messages 必填且为非空数组' }); return
@@ -56,11 +68,13 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
     const lastUserMsg = messages.filter((m: { role: string }) => m.role === 'user').pop()
     const userQuery = lastUserMsg?.content || ''
 
-    // 收集需要检索的 datasetIds
+    // 收集需要检索的 datasetIds（支持直接传入，医生助手场景）
     const targetDatasetIds: string[] = []
     const targetReportId = reportId || (Array.isArray(reportIds) && reportIds[0])
 
-    if (Array.isArray(reportIds) && reportIds.length > 0) {
+    if (Array.isArray(datasetIds) && datasetIds.length > 0) {
+      targetDatasetIds.push(...datasetIds.slice(0, config.multiReportMax))
+    } else if (Array.isArray(reportIds) && reportIds.length > 0) {
       for (const rid of reportIds.slice(0, config.multiReportMax)) {
         const rpt = getReport(rid)
         if (rpt?.ragflowDatasetId) targetDatasetIds.push(rpt.ragflowDatasetId)
@@ -71,8 +85,12 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
       if (report.ragflowDatasetId) targetDatasetIds.push(report.ragflowDatasetId)
     }
 
-    // ===== 模式1: RAGFlow Chat（首选） =====
-    if (config.ragflowChatId && config.ragflowApiKey && targetDatasetIds.length > 0) {
+    // 医生助手模式：直接传 datasetIds 时使用医学 prompt，且优先用 retrieval（可指定数据集）
+    const isDoctorMode = Array.isArray(datasetIds) && datasetIds.length > 0
+
+    // ===== 模式1: RAGFlow Chat（首选，仅当非医生模式或配置了医生 Chat 时） =====
+    const chatId = isDoctorMode ? (config.ragflowDoctorChatId || config.ragflowChatId) : config.ragflowChatId
+    if (chatId && config.ragflowApiKey && targetDatasetIds.length > 0 && !isDoctorMode) {
       try {
         const result = await ragflowChatMode(userQuery, messages, targetDatasetIds)
 
@@ -91,10 +109,11 @@ chatRouter.post('/chat', async (req: Request, res: Response) => {
       }
     }
 
-    // ===== 模式2: RAGFlow Retrieval + 本地 LLM =====
+    // ===== 模式2: RAGFlow Retrieval + 本地 LLM（医生模式必走此路径，可指定 datasetIds） =====
     if (config.ragflowApiKey && targetDatasetIds.length > 0) {
       try {
-        const result = await ragflowRetrievalMode(userQuery, messages, targetDatasetIds, model)
+        const systemPrompt = isDoctorMode ? RAG_DOCTOR_PROMPT : RAG_SYSTEM_PROMPT
+        const result = await ragflowRetrievalMode(userQuery, messages, targetDatasetIds, model, systemPrompt)
 
         if (targetReportId) {
           addChatRecord(targetReportId, 'user', userQuery)
@@ -177,7 +196,8 @@ async function ragflowRetrievalMode(
   userQuery: string,
   messages: Array<{ role: string; content: string }>,
   datasetIds: string[],
-  model?: string
+  model?: string,
+  systemPrompt = RAG_SYSTEM_PROMPT
 ): Promise<{ content: string; references: ReferenceItem[] }> {
   const uniqueIds = [...new Set(datasetIds)]
   const { chunks } = await ragflow.retrieve(userQuery, uniqueIds, { top_k: 8 })
@@ -191,7 +211,7 @@ async function ragflowRetrievalMode(
     `[片段${i + 1}] (来源: ${c.document_name}, 相关度: ${(c.similarity * 100).toFixed(0)}%)\n${c.content}`
   )
 
-  const systemContent = RAG_SYSTEM_PROMPT + contextParts.join('\n\n---\n\n')
+  const systemContent = systemPrompt + contextParts.join('\n\n---\n\n')
 
   const llmMessages: ChatMessage[] = [
     { role: 'system', content: systemContent },
@@ -230,6 +250,63 @@ function extractReferences(ref?: ragflow.RagflowReference | null): ReferenceItem
     positions: c.positions,
   }))
 }
+
+/**
+ * 流式对话 - POST /api/chat/stream
+ * 仅支持医生模式（datasetIds），返回 SSE
+ */
+chatRouter.post('/chat/stream', async (req: Request, res: Response) => {
+  try {
+    const { datasetIds, messages, model } = req.body || {}
+    if (!Array.isArray(messages) || messages.length === 0) {
+      res.status(400).json({ error: 'messages 必填' })
+      return
+    }
+    const ids = Array.isArray(datasetIds) && datasetIds.length > 0 ? datasetIds : []
+    if (ids.length === 0) {
+      res.status(400).json({ error: 'datasetIds 必填（医生模式）' })
+      return
+    }
+
+    const lastUser = messages.filter((m: { role: string }) => m.role === 'user').pop()
+    const userQuery = lastUser?.content || ''
+    const { chunks } = await ragflow.retrieve(userQuery, [...new Set(ids)], { top_k: 8 })
+    if (!chunks.length) {
+      res.status(400).json({ error: 'RAGFlow 检索无结果' })
+      return
+    }
+
+    const contextParts = chunks.map((c, i) =>
+      `[片段${i + 1}] (来源: ${c.document_name}, 相关度: ${(c.similarity * 100).toFixed(0)}%)\n${c.content}`
+    )
+    const systemContent = RAG_DOCTOR_PROMPT + contextParts.join('\n\n---\n\n')
+    const llmMessages: ChatMessage[] = [
+      { role: 'system', content: systemContent },
+      ...messages.map((m) => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content })),
+    ]
+
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.flushHeaders?.()
+
+    for await (const chunk of chatStream(llmMessages, { model })) {
+      res.write(`data: ${JSON.stringify({ type: 'content', content: chunk })}\n\n`)
+    }
+    const references = chunks.map((c) => ({
+      content: c.content.slice(0, 300),
+      documentName: c.document_name,
+      similarity: c.similarity,
+      positions: c.positions,
+    }))
+    res.write(`data: ${JSON.stringify({ type: 'done', references })}\n\n`)
+    res.end()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '流式对话失败'
+    res.write(`data: ${JSON.stringify({ type: 'error', error: msg })}\n\n`)
+    res.end()
+  }
+})
 
 /** 获取某研报的聊天历史 */
 chatRouter.get('/chat/:reportId/history', (req: Request, res: Response) => {

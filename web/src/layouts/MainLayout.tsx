@@ -4,7 +4,7 @@ import { Layout, Menu, Avatar, Dropdown, type MenuProps } from 'antd'
 import {
   DashboardOutlined, FileTextOutlined, SearchOutlined,
   UserOutlined, LogoutOutlined, KeyOutlined, MenuFoldOutlined,
-  MenuUnfoldOutlined, TeamOutlined, DatabaseOutlined,
+  MenuUnfoldOutlined, TeamOutlined, DatabaseOutlined, RobotOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '@/store/auth'
 
@@ -18,6 +18,7 @@ export default function MainLayout() {
 
   const menuItems: MenuProps['items'] = [
     { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
+    { key: '/doctor', icon: <RobotOutlined />, label: '医生助手' },
     { key: '/reports', icon: <FileTextOutlined />, label: '研报管理' },
     { key: '/search', icon: <SearchOutlined />, label: '研报搜索' },
     {
@@ -38,7 +39,7 @@ export default function MainLayout() {
   ]
 
   const pathname = location.pathname
-  const selectedKey = pathname.startsWith('/knowledge/') ? pathname : '/' + pathname.split('/')[1]
+  const selectedKey = pathname.startsWith('/knowledge/') ? pathname : pathname.split('/')[1] ? `/${pathname.split('/')[1]}` : pathname
   const openKeys = pathname.startsWith('/knowledge') ? ['knowledge-group'] : []
 
   return (

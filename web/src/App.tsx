@@ -10,6 +10,7 @@ import UsersPage from '@/pages/users'
 import PasswordPage from '@/pages/password'
 import KnowledgePage from '@/pages/knowledge'
 import KnowledgeSearchPage from '@/pages/knowledge/search'
+import DoctorChatPage from '@/pages/doctor/chat'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/:id" element={<ReportDetailPage />} />
         <Route path="search" element={<SearchPage />} />
+        <Route path="doctor" element={<DoctorChatPage />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="knowledge/search" element={<KnowledgeSearchPage />} />
         <Route path="password" element={<PasswordPage />} />

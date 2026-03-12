@@ -1,0 +1,48 @@
+name: Deploy to Aliyun ECS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH and deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_USER: ${{ secrets.ECS_USER }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$ECS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
+          REMOTE_DIR="/opt/doctor-saas"
+          TARGET="${ECS_USER}@${ECS_HOST}"
+
+          echo "Creating remote directory..."
+          ssh $SSH_OPTS "$TARGET" "sudo mkdir -p $REMOTE_DIR && sudo chown \$USER:\$USER $REMOTE_DIR"
+
+          echo "Syncing project (excluding node_modules, .git, dist, ragflow-repo; skip deploy/.env.production)..."
+          rsync -avz \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude 'dist' \
+            --exclude 'web/dist' \
+            --exclude 'server/data/*.db' \
+            --exclude 'ragflow-repo' \
+            --exclude 'deploy/.env.production' \
+            -e "ssh $SSH_OPTS" \
+            ./ "$TARGET:$REMOTE_DIR/"
+
+          echo "Running deploy.sh --skip-deps on ECS..."
+          ssh $SSH_OPTS "$TARGET" "cd $REMOTE_DIR/deploy && chmod +x deploy.sh && sudo ./deploy.sh --skip-deps"
+
+          echo "Deploy completed. App: http://$ECS_HOST"

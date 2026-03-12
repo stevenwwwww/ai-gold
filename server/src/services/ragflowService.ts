@@ -198,13 +198,16 @@ export async function deleteDatasets(ids: string[]): Promise<void> {
 /**
  * 上传文档到知识库
  * RAGFlow 接受 multipart/form-data，file 字段
+ * @param contentType 可选，默认根据 fileName 推断（.txt -> text/plain, .pdf -> application/pdf）
  */
 export async function uploadDocument(
   datasetId: string,
   fileBuffer: Buffer,
-  fileName: string
+  fileName: string,
+  contentType?: string
 ): Promise<RagflowDocument[]> {
-  const blob = new Blob([fileBuffer], { type: 'application/pdf' })
+  const mime = contentType ?? (fileName.endsWith('.txt') ? 'text/plain' : 'application/pdf')
+  const blob = new Blob([fileBuffer], { type: mime })
   const form = new FormData()
   form.append('file', blob, fileName)
 
